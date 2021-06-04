@@ -1,0 +1,49 @@
+// check stuff to see if the server is still there, and to restart if it isn't
+
+var INTERVAL = 5 * 60000;
+var QUIT_INTERVAL = 1 * 60000;
+var timer;
+var quitTimer;
+
+function restart() {
+    process.exit(11);
+}
+
+function timeout(bot) {
+    stopTimer();
+    quitTimer = setTimeout(() => {
+        bot.send('QUIT :Server is not responding');
+        bot.ircsock.destroy();
+        restart();
+    }, QUIT_INTERVAL);
+    bot.events.once('data', () => {
+        clearTimeout(quitTimer);
+        startTimer(bot);
+    });
+    bot.send('PING '+Date.now());
+}
+
+function startTimer(bot) {
+    if (!timer) timer = setTimeout(() => timeout(bot), INTERVAL);
+}
+
+function stopTimer() {
+    clearTimeout(timer);
+    timer = undefined;
+}
+
+function refreshTimer(bot) {
+    stopTimer();
+    startTimer(bot);
+}
+
+module.exports = function load(bot) {
+    if (bot.config.modules['ping.js']) {
+        clearTimeout(bot.config.modules['ping.js'].timer);
+        clearTimeout(bot.config.modules['ping.js'].quitTimer);
+    }
+    bot.events.on('connclosed', restart);
+    bot.events.on('data', () => refreshTimer(bot));
+    startTimer(bot);
+    return {timer, quitTimer, stopTimer, startTimer, refreshTimer, timeout};
+}

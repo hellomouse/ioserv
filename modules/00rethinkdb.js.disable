@@ -1,0 +1,6 @@
+// load rethinkdb
+var r = require('rethinkdbdash');
+
+module.exports = function(bot) {
+    if (!bot.r) bot.r = r({db: 'bot'});
+}

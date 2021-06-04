@@ -1,0 +1,35 @@
+"use strict"; // Why do we need it?
+var fs = require('fs');
+module.exports = {
+	"host": "127.0.0.1",
+	"modules": ["modules/general"],
+	"port": 6697,
+	"sid":"042",
+	"password": "password",
+	"sdesc": "IoServ",
+	// "bname": "IoServ",
+	"bhost": "ioserv.freenode.ceo",
+	"sname": "ioserv.freenode.ceo",
+	"usid": "9EE",
+	"usname": "irc.freenode.ceo",
+motd:`------ MoTD ------
+COLD WET SERVICES
+------ EOF -------`,
+    "botUser": {
+        nick: 'IoServ',
+        ident: 'ioserv',
+        host: 'ioserv.freenode.ceo',
+        modes: 'Szioq',
+        realname: 'Iovoid Services'
+    },
+	"uperms": {
+		"iovoid": 11
+    },
+    "chanconfig": {},
+    "logchannel": "#services",
+    "cmdchar": "=",
+    "authtype": "idk",
+    "overrideCert": true,
+    "cert": fs.readFileSync("./ioserv.cert.pem"),
+    "certkey": fs.readFileSync("./ioserv.pem")
+};

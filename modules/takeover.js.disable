@@ -1,0 +1,59 @@
+// NOTE: reload will remove all channels until i build a proper thing
+// requires rethinkdb to be initialized on the bot first
+// this is *pretty much* the new otherbot's channel.js (just exclude the takeover functionality :P)
+
+var crypto = require('crypto');
+
+// aggressive mode, where it actively fights back against whoever tries to kill it
+var aggressive = false;
+var aggressiveKillList = [];
+
+var channels = {}; // channels the bot is in
+var users = {}; // users are put in here by *!*@* mask
+
+function takeover(bot, chan) {
+    bot.mode(chan, '+Silkj 1 ' + crypto.randomBytes(32).toString('hex') + '1:10000000000'); // this never fails :D
+}
+
+function modeParser(mstr, ext) { // '+ilk', '1 aiwefj3n3f3' for example
+    var out = {
+        '+': [],
+        '-': []
+    }
+    var cur = 0;
+    for (var i of mstr.split('')) {
+        if (i === '+' ||  i === '-') cur = i;
+        else out[cur].push();
+    }
+}
+
+function handleJoin(event) { // locally populate stuff
+    var bot = event.bot;
+    
+}
+
+function handleNames(event) {
+    
+}
+
+function handleMode(event) { // parse modes, see if we are banned and attempt to unban
+    
+}
+
+function handleKick(event) {
+    
+}
+
+function hostDetect(event) { // numeric 396 (format :wilhelm.freenode.net 396 iczero unaffiliated/iczero :is now your hidden host (set by services.))
+    
+}
+
+function handleNick(event) {
+    
+}
+
+module.exports = function(bot) {
+    if (!bot.channels) bot.channels = {};
+    bot.client.capabilities.push('userhost-in-names');
+    
+}

@@ -1,0 +1,181 @@
+/* this shall no longer exist
+const crypto = require("crypto");
+const Promise = require('bluebird');
+const colours = require("irc-colors");
+let fs = require("fs");
+
+fs = Promise.promisifyAll(fs);
+
+var allowedPartyFlags = {
+    "RandomJoin": ["off", "on", "strict"]
+}
+
+function isInParty(parties, event) {
+    
+    let error = false; 
+    for (let element in parties) {
+        element = parties[element];
+        // Make sure user doesn't own or is in another party
+        if (Object.keys(element.members).includes(event.host.slice(1,3).join("@"))) error = true;
+        if (element.owner == event.host.slice(1,3).join("@")) error = true;
+        
+    };
+    return error
+    
+}
+
+crypto.randomBytesAsync = Promise.promisify(crypto.randomBytes);
+const main = async function main(bot, config) {
+    if(!bot.db){bot.db = {}};
+    if(!bot.db["parties"]) bot.db["parties"] = {}
+    if(!bot.db["games"]) bot.db["games"] = {}
+    let self = {} // this is evil
+    bot.verside = self;
+    self.games = {};
+    self.sessions = {} // Stores currently active games
+    self.init_games = async function(){
+        
+        self.games_list = fs.readdirSync("./modules/games");
+        console.log(self.games_list)
+        for(let game of self.games_list) {
+            self.games[game] = require("./games/" + game + "/index.js")(bot, config, self);
+        }
+        
+    }
+    
+    Promise.promisify(self.init_games)
+    await self.init_games()
+    
+    bot.addCmd("_join", "verside", async function joinGame (event) {
+        event.sendBack(self.games_list || "nothing 4 u")
+        if (event.chan !== "#Verside") {
+            return;
+        }
+    
+        event.sendBack(event.args.length);
+        if (event.args.length == 0) {
+            
+            event.sendBack(event.host[0] + " (Syntax) Join <game> | Use the 'games' command for a list of games");
+            
+        }
+        
+    })
+    
+    bot.addCmd("start", "verside", async function startGame (event) {
+        
+        if (event.chan.indexOf("#Verside-Party") == -1 && event.args.includes("--override") == -1){event.sendBack("Must be executed in a party channel"); return}
+        if (event.args.includes("--override") > -1) event.args.splice(0,1);
+        
+        
+        if (self.games_list.includes(event.args[0])){
+            
+            let game = Object(bot.verside.games)[event.args[0]]
+            if (game.config.requires.includes("party")){
+                
+                if (!(isInParty(bot.db.parties, event))){ event.sendBack("You need to be in a party to play this game"); return }
+                
+            }
+            //Object(bot.verside.games)["hangman"]
+            
+        } else {
+
+            event.sendBack("That game doesn't exist");
+            
+        }
+    
+        
+    })
+    
+    bot.addCmd("party", "verside", async function joinGame (event) {
+        
+        if (event.args[0] == "create") {
+            if (event.chan !== "#Verside") return;
+            
+            let error; 
+            for (let element in bot.db.parties) {
+                element = bot.db.parties[element];
+                // Make sure user doesn't own or is in another party
+                if (Object.keys(element.members).includes(event.host.slice(1,3).join("@"))) error = true;
+                if (element.owner == event.host.slice(1,3).join("@")) error = true;
+                
+            };
+            if(error) return event.sendBack("You own/are in another party");
+        
+            let partyName;
+            do {
+                partyName = await crypto.randomBytesAsync(8);
+                partyName = partyName.toString("hex"); // Party name can't be a duplicate
+            } while ( bot.db.parties[partyName] );
+            
+            bot.db.parties[partyName] = { // Create new party
+                
+                "owner": `${event.host[1]}@${event.host[2]}`, // event.host.slice(1,3).join("@")
+                "channel": `#Verside-Party-${partyName}`,
+                "members": {},
+                "game": {channels: undefined}, // You could split a party up into parts and have those parts versus eachother in separate game channels. Default is first index for one channel. obviously
+                "xp_multiplier": 0,
+                "flags": {},
+                "entropy": partyName // yay a entropy pool
+            }
+            event.reply(`${colours.green("Success")}! Your party has been created. Please accept the channel invite`);
+            bot.join("IoServ", `#Verside-Party-${partyName}`, true);
+            bot.send(`:IoServ INVITE ${event.host[0]} #Verside-Party-${partyName}`);
+            bot.send(`:IoServ TOPIC #Verside-Party-${partyName} :Welcome to your party! You can use |invite <friend> to invite someone or |party leave if you want to leave.`);
+        }
+        
+        if (event.args[0] == "leave") {
+            if (event.chan.slice(0,9) !== "#Verside") return;
+            
+            let error; 
+            for (let element in bot.db.parties) {
+                element = bot.db.parties[element];
+                // Make sure user doesn't own or is in another party
+                if (Object.keys(element.members).includes(event.host.slice(1,3).join("@"))) error = true;
+                if (element.owner == event.host.slice(1,3).join("@")) error = true;
+            
+            
+                if (error) {
+                
+                    bot.send(`PART ${element.channel}`); // Leave Party channel. Maybe kick everyone first >:)
+                    bot.db.parties[element.channel.replace("#Verside-Party-","")] = {};
+                    delete(bot.db.parties[element.channel.replace("#Verside-Party-","")]);
+                }
+            }
+            
+        }
+        
+    })
+    bot.addCmd('_invite', 'verside', event => {
+        if(event.chan.indexOf("#Verside-Party-") == -1) return event.reply("\u000304(ERROR)\u0003 You can only invite players from that respective party/game channel.");
+        let partyName = event.chan.replace("#Verside-Party-","");
+        if(!bot.db.parties[partyName]) return event.reply("Invalid party. WTF");
+        let inviteAll = bot.db.parties[partyName].flags.invites =="all";
+        if(!inviteAll && bot.db.parties[partyName].owner != `${event.host[1]}@${event.host[2]}`) return event.reply("Not a party owner.");
+        if(!event.args[0]) return event.reply("Its: invite <user>");
+        bot.send(`NOTICE ${event.args[0]} :You've been invited to join \u000307${event.host[0]}\u0003's party. Please accept the invite to join`);
+        bot.send(`:IoServ INVITE ${event.args[0]} #Verside-Party-${partyName}`);
+    }, 'Invite a friend to your party.', 0);
+        bot.addCmd('entropy', 'verside', event => {
+        if(event.chan.indexOf("#Verside-Party-") == -1) return event.reply("\u000304(ERROR)\u0003 You can only invite players from that respective party/game channel.");
+        let partyName = event.chan.replace("#Verside-Party-","");
+        if(!bot.db.parties[partyName]) return event.reply("Invalid party. WTF");
+        if(!event.args[0]) return event.reply(`Party has ${bot.db.parties[partyName].entropy.length} chars of mid-quality entropy.`)
+        bot.db.parties[partyName].entropy += event.args[0];
+    }, 'Adds entropy.', 0);
+    /*
+    bot.addCmd('flags', 'verside', event => {
+        if(event.chan.indexOf("#Verside-Party-") == -1) return event.reply("\u000304(ERROR)\u0003 Flags can only be modified while in a party/game channel");
+        let partyName = event.chan.replace("#Verside-Party-","");
+        if(!bot.db.parties[partyName]) return event.reply("Invalid party. WTF");
+        if(event.args[0]=="list"){
+            if (!bot.db.parties[parent]["flags"])
+            
+        }
+        
+        
+    });
+    *//*
+    return self;
+};
+module.exports = main;
+*/
