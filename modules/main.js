@@ -196,7 +196,7 @@ module.exports = function(bot, config) {
     }, "(level 11) Execute the command as other service, usage: by <service> <command> [<arguments>]", 11);
     bot.addCmd('invite', 'main', event => {
         let chan = event.args[0];
-        bot.send(`:${bot.config.bname} INVITE ${event.rhost.uid} ${chan} 0`);
+        bot.send(`:${bot.config.botUser.uid} INVITE ${event.rhost.uid} ${chan} 0`);
     }, '(level 11) Get an invite to a channel', 11);
 }
 

@@ -45,7 +45,7 @@ if (cluster.isMaster) {
             console.log('[NOTICE] Graceful exit from worker');
         } else if (code === 11) { // restart command given
             console.log('[NOTICE] Restart requested from worker');
-            cluster.fork();
+            setTimeout(() => cluster.fork(), 1000);
         } else { // something went wrong?
             console.log('[WARN] Worker unexpectedly exited, restarting...');
             setTimeout(() => cluster.fork(), 5000);
@@ -90,17 +90,16 @@ if (cluster.isMaster) {
 
     loadModules(bot, false, config);
     bot.start();
-    bot.events.on('connclosed', () => proess.exit(11));
+    bot.events.on('connclosed', () => setTimeout(() => process.exit(11), 3000));
     bot.events.on('regdone', _=>{
       // handled in config as botUser
-      // bot.addUser("IoServ","IoServ","ioserv.hellomouse.net","zio","Iovoid Services");
       bot.join(bot.config.botUser.uid,"#services");
       bot.mode('#services', '+o ' + bot.config.botUser.nick);
       bot.join(bot.config.botUser.uid, "#hellomouse");
       bot.join(bot.config.botUser.uid, '#pissnet');
       bot.mode('#pissnet', '+o ' + bot.config.botUser.nick);
-      // bot.addUser("TestServ","TestServ","ioserv.hellomouse.net","zi","Testing Services");
-      // bot.join("TestServ","#services",true);
+      bot.join(bot.config.botUser.uid, '#opers');
+      bot.mode('#opers', '+o ' + bot.config.botUser.nick);
       let lolserv = bot.addUser({ nick: "LolServ", ident: "LolServ", host: "ioserv.hellomouse.net", modes: "Szi", realname: "Laughing Services" });
       bot.join(lolserv,"#services",true);
       let undefinedserv = bot.addUser({ nick: 'undefined', ident: 'undefined', host: 'undefined', modes: 'zi', realname: 'undefined' }); // YAY

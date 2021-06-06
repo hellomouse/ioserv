@@ -289,6 +289,11 @@ module.exports = function(bot, config) {
         event.replyas = 'LolServ';
         event.emote('throws \x02' + event.args[0] + '\x02 out of a window');
     }, 'Defenestrate somebody');
+    bot.addCmd('shrug', 'fun', event => {
+        event.replyas = 'LolServ';
+        event.sendBack('¯\\_(ツ)_/¯');
+    }, '¯\\_(ツ)_/¯');
+    bot.addCmd('piss', 'fun', event => event.sendBack('piss'), 'piss');
     bot.events.on('privmsg', event => {
         if (event.type === 'ctcp' && event.cmd === 'action' && event.args.length >= 2 && event.args.join(' ').match(POKE_REGEX)) {
             if (NO_POKEBACK.includes(event.host[0])) return;
@@ -557,7 +562,7 @@ module.exports = function(bot, config) {
           string.splice(-2);
           event.sendBack(string.map(a=>a.substr(4)).slice(2).join("\n"));
         });
-    }, ':D QR codes in IRC', 10);
+    }, ':D QR codes in IRC');
     bot.addCmd("killme", "fun", event => {
         bot.kill(event.rhost.uid, event.args.join(' ') || 'You have been killed!');
     }, "Nothing bad...");

@@ -14,19 +14,19 @@ function ircbot(config) {
 	this.encapmsg = newEvent();
 	this.userEvent = newEvent();
 	this.server = {
-        datapart: "",
-        clients: new Map(),
-        clientsByNick: new Map(),
-        servers: {},
-        channels: new Map()
-    };
+            datapart: "",
+            clients: new Map(),
+            clientsByNick: new Map(),
+            servers: new Map(),
+            channels: new Map()
+        };
 	this.server.servers.set(config.sid, config.sname);
 	this.server.servers.set(config.usid, config.usname);
 	this.client = {
-        users: new Map(),
-        uid:1,
-        capab: ["NOQUIT", "NICKv2", "SJOIN", "SJ3", "CLK", "TKLEXT", "TKLEXT2", "NICKIP", "ESVID", "MLOCK", "EXTSWHOIS"]
-    };
+            users: new Map(),
+            uid:1,
+            capab: ["NOQUIT", "NICKv2", "SJOIN", "SJ3", "CLK", "TKLEXT", "TKLEXT2", "NICKIP", "ESVID", "MLOCK", "EXTSWHOIS"]
+        };
 	this.config = config;
 	this.cmds = Object.create(null);
 	this.cmdgroups = Object.create(null);
@@ -42,10 +42,9 @@ function ircbot(config) {
 	this.ircsock.on('connect', function() {
 		console.log('Connected to server!');
 		bot.send(`PASS :${config.password}`);
-                bot.send(`PROTOCTL EAUTH=${config.sname} SID=${config.sid}`);
+        bot.send(`PROTOCTL EAUTH=${config.sname} SID=${config.sid}`);
 		bot.send(`PROTOCTL :${bot.client.capab.join(" ")}`);
 		bot.send(`SERVER ${config.sname} 1 :${config.sdesc}`);
-		bot.send(`EOS`);
 	}).on('data', function(data) {
 		var data = data.toString('utf-8');
 		if (!data.endsWith('\n')) {
@@ -128,7 +127,7 @@ ircbot.prototype = {
         let uid = user.uid;
         for (let c of user.channels) {
             let channel = this.getChannel(c);
-            channel.users.delete(uid);
+            if (channel) channel.users.delete(uid);
         }
         this.server.clients.delete(uid);
         this.client.users.delete(uid); // may not exist
@@ -180,8 +179,15 @@ ircbot.prototype = {
 	},
     getUser(nickOrUID) {
         if (!nickOrUID) throw new Error('argument cannot be undefined');
+        if (typeof nickOrUID === 'object') return this.server.clients.get(nickOrUID.uid) || null;
         if (nickOrUID[0].match(/\d/)) return this.server.clients.get(nickOrUID) || null;
         else return this.getUserByNick(nickOrUID);
+    },
+    changeHost(nickOrUID, host) {
+        if (host.match(/\s/)) throw new Error('invalid hostname');
+        let user = this.getUser(nickOrUID);
+        user.host = host;
+        this.send(`:${this.config.sid} CHGHOST ${user.uid} :${host}`);
     },
     getChannel(name) {
         return this.server.channels.get(name.toLowerCase()) || null;
@@ -191,7 +197,9 @@ ircbot.prototype = {
         let c = {
             name,
             ts,
-            users: new Map()
+            users: new Map(),
+            metadata: new Map(), // varname=>value channel metadata set by MD
+            member_metadata: new Map(), // user=>varname=>value member metadata set by MD
             // TODO: modes when i get off my ass
         };
         this.server.channels.set(name.toLowerCase(), c);
@@ -218,7 +226,11 @@ ircbot.prototype = {
         realname = this.config.sdesc
     }) {
         if (!nick) throw new Error('nick is required');
-        if (this.getUserByNick(nick)) throw new Error('duplicate nick');
+        let prevUser = this.getUser(nick);
+        if (prevUser) {
+            if (prevUser.server === this.config.sname) throw new Error('duplicate nick');
+            else this.kill(nick, 'y u steal ioserv nick :(', '042');
+        }
 		let uid = this.makeUID();
 		let ts = this.getTS();
 		this.send(`:${this.config.sid} UID ${nick} 0 ${ts} ${ident} ${host} ${uid} 0 +${modes} * * * :${realname}`);
@@ -231,7 +243,9 @@ ircbot.prototype = {
 			modes,
 			ts,
 			account: null,
-            channels: new Set(),
+                        channels: new Set(),
+                        metadata: new Map(), // varname=>value metadata set by MD
+                        metadata_membership: new Map(), // channel_varname=>value membership metadata set by MD
 			server: this.config.sname
 		};
         this.client.users.set(uid, client);
@@ -276,7 +290,7 @@ ircbot.prototype = {
 	},
 	init() {
 		var bot = this;
-		this.addCmd('echo','general',function(event) {event.reply(event.args.join(' '));},"Echoes something",11);
+		this.addCmd('echo','general',function(event) {event.reply(event.args.join(' '));},"Echoes something");
 		this.addCmd('ping','general',"pong","Requests a pong from the bot");
 		this.addCmd('pong','general',"Did you mean ping? Anyways ping","<AegisServer2> It's ping you moron.");
 		this.addCmd('eval','general',function(event) {
@@ -334,11 +348,14 @@ ircbot.prototype = {
 
 		this.servmsg.on('PING', function(head,msg,from) {
 			bot.send(`:${msg[1] || bot.config.sname} PONG ${msg[1]} ${msg[0]}`);
-		}).once('SERVER', function() {
+		}).on('EOS', (head, msg, from) => {
+            if (from !== bot.config.usid) return;
             bot.config.botUser.uid = bot.addUser(bot.config.botUser);
+            bot.send(`:${bot.config.sid} EOS`);
 			bot.events.emit('regdone');
 		}).on('PRIVMSG', function(head,msg,from,raw) {
 			var event = new bot.PrivateMessageEvent(bot,head,msg,from,raw);
+            if (!event.valid) return;
 			bot.privmsg.emit(event.chan,event);
 			bot.events.emit('privmsg',event);
 			if (event.type == 'ctcp') {
@@ -353,10 +370,12 @@ ircbot.prototype = {
 							event.reply("You do not have permission to use this command.");
 						}
 					} catch(e) {
-						bot.sendMsg(event.chan,"An error occured while processing your command: "+e);
-						bot.sendMsg(bot.config.logchannel,e.stack);
-						bot.sendMsg(bot.config.logchannel,'Caused by '+event.host[0]+'!'+event.host[1]+'@'+event.host[2]+' using command '+event.cmd+' with arguments ['+event.args.toString()+'] in channel '+event.chan);
-					}
+                        if (bot.getChannel(bot.config.logchannel)) {
+						    bot.sendMsg(event.chan || bot.config.logchannel,"An error occured while processing your command: "+e);
+						    bot.sendMsg(bot.config.logchannel,e.stack);
+						    bot.sendMsg(bot.config.logchannel,'Caused by '+event.host[0]+'!'+event.host[1]+'@'+event.host[2]+' using command '+event.cmd+' with arguments ['+event.args.toString()+'] in channel '+event.chan);
+					    }
+                    }
 				}
 			}
 		}).on('UID',function(head,msg,from,raw) {
@@ -373,17 +392,20 @@ ircbot.prototype = {
                 realname: msg.join(' '),
                 server: null,
                 account: null,
-                channels: new Set()
+                channels: new Set(),
+                metadata: new Map(),
+                metadata_membership: new Map(),
 			};
             if (client.vhost === '*') client.vhost = null;
             if (client.chost === '*') client.chost = null;
             client.server = bot.server.servers.get(client.uid.slice(0, 3));
             bot.server.clients.set(client.uid, client);
             bot.server.clientsByNick.set(client.nick.toLowerCase(), client);
+            bot.events.emit('newUser', client);
 		}).on('SID', function(head,msg,from) {
 			bot.server.servers.set(head[3], head[1]);
 		}).on('CHGHOST',function(head,msg,from,raw) {
-            // is this used in unreal?
+            // is this used in unreal? yes
 			var parts = raw.split(" ");
             let user = bot.getUser(parts[2]);
 			if (user) user.vhost = parts[3]; // user.vhost?
@@ -405,6 +427,36 @@ ircbot.prototype = {
             let user = bot.getUser(from);
             let channel = bot.getChannel(head[1]);
             bot._handleChannelPart(channel, user);
+        }).on('MD', (head, msg, from) => {
+            let type = head[1];
+            switch (type) {
+                case 'client': {
+                    let user = bot.getUser(head[2]);
+                    if (!user) return;
+                    user.metadata.set(head[3], msg);
+                    break;
+                }
+                case 'channel': {
+                    let channel = bot.getChannel(head[2]);
+                    if (!channel) return;
+                    user.metadata.set(head[3], msg);
+                    break;
+                }
+                case 'member': {
+                    let channel = bot.getChannel(head[2]);
+                    if (!channel) return;
+                    if (!channel.member_metadata.has(head[3])) channel.member_metadata.set(head[3], new Map());
+                    channel.metadata_membership.get(head[3]).set(head[4], msg);
+                    break;
+                }
+                case 'membership': {
+                    let user = bot.getUser(head[2]);
+                    if (!user) return;
+                    if (!user.metadata_membership.has(head[3])) user.metadata_membership.set(head[3], new Map());
+                    user.metadata_membership.get(head[3]).set(head[4], msg);
+                    break;
+                }
+            }
         }).on("MOTD",function(head,msg,from){
 			let motd = bot.config.motd.split("\n");
 			for(let line of motd) {

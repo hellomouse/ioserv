@@ -1,12 +1,29 @@
 "use strict";
 function PrivateMessageEvent(bot,head,msg,from,raw) {
+    this.valid = false;
     this.raw = raw;
-    var rhost = bot.server.clients[from] || bot.getUserByNick(from) || {};
+    this.replyas = null;
+    let rhost = bot.getUser(from);
+    // user does not exist
+    if (!rhost) {
+        // bot.send(`:${bot.config.sid} KILL ${from} :Unknown user`);
+        console.error('=============================================');
+        console.error('WARNING: UNKNOWN USER DETECTED', raw);
+        console.error('=============================================');
+        return;
+    }
     var host = [rhost.nick,rhost.ident,rhost.host];
-    var chan = head[1];
-    if (chan.startsWith(bot.config.sid)) {
-        chan = host[0];
-        this.replyas = head[1];
+    let chan = null; // TODO: REFACTOR
+    let messageTarget = bot.getChannel(head[1]);
+    if (messageTarget) chan = messageTarget.name;
+    else {
+        messageTarget = bot.getUser(head[1]);
+        if (messageTarget) {
+            // message to pseudoserver to a user that is not on the pseudoserver
+            if (messageTarget.server !== bot.config.sname) return;
+            chan = rhost.uid;
+            this.replyas = messageTarget.uid;
+        } else return;
     }
     var type = 'msg';
     var cmd = null;
@@ -33,6 +50,7 @@ function PrivateMessageEvent(bot,head,msg,from,raw) {
     this.cmd = cmd;
     this.type = type;
     this.bot = bot;
+    this.valid = true;
 }
 PrivateMessageEvent.prototype = {
     emote(msg,trunc) {
