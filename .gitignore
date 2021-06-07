@@ -1,4 +1,5 @@
 *.pem
 /config.js
 node_modules
+/log.txt
 

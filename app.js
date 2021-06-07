@@ -78,6 +78,7 @@ if (cluster.isMaster) {
         } else {
             // this is probably stupid - iczero, 2021
             console.log(`Press ^C ${SIGINT_EXIT_COUNT - sigintCount} more times to quit`);
+            consoleinterface.clearLine();
         }
         //process.emit('SIGINT');
         //console.log('Closing connection. Use Ctrl-D to exit');

@@ -189,6 +189,12 @@ ircbot.prototype = {
         user.host = host;
         this.send(`:${this.config.sid} CHGHOST ${user.uid} :${host}`);
     },
+    changeIdent(nickOrUID, ident) {
+        if (ident.match(/s/)) throw new Error('invalid ident');
+        let user = this.getUser(nickOrUID);
+        user.ident = ident;
+        this.send(`:${this.config.sid} CHGIDENT ${user.uid} ${user.ident}`);
+    },
     getChannel(name) {
         return this.server.channels.get(name.toLowerCase()) || null;
     },
@@ -209,6 +215,13 @@ ircbot.prototype = {
         if (!channel || !user) return;
         channel.users.delete(user.uid);
         if (!channel.users.size) this.server.channels.delete(channel.name.toLowerCase());
+    },
+    _handleNickChange(user, newNick, ts) {
+        if (!user) return;
+        this.server.clientsByNick.delete(user.nick.toLowerCase());
+        user.nick = newNick;
+        user.ts = ts;
+        this.server.clientsByNick.set(user.nick.toLowerCase(), user);
     },
 	makeUID() {
 		let uid = (this.client.uid++%1e6).toString(16);
@@ -259,6 +272,20 @@ ircbot.prototype = {
 		this.send(`:${user.uid} QUIT :${reason || 'Shutting down...'}`);
         this._handleRemoveUser(user);
 	},
+    changeNick(uidOrNick, newNick, force = false) {
+        if (newNick.match(/\s/)) throw new Error('invalid nick');
+        let user = this.getUser(uidOrNick);
+        if (!user || user.server !== this.config.sname) throw new Error('nonlocal user');
+        let collided = this.getUser(newNick);
+        if (collided) {
+            if (!force) throw new Error('nick collision');
+            if (collided.server === this.config.sname) this.delUser(collided.uid);
+            else this.kill(collided.uid, 'your nick has been stolen by IoServ!');
+        }
+        let ts = this.getTS();
+        this.send(`:${user.uid} NICK ${newNick} ${ts}`);
+        this._handleNickChange(user, newNick, ts);
+    },
 	join(uidOrNick,chan) {
         let user = this.getUser(uidOrNick);
         if (!user || user.server !== this.config.sname) return false;
@@ -409,7 +436,11 @@ ircbot.prototype = {
 			var parts = raw.split(" ");
             let user = bot.getUser(parts[2]);
 			if (user) user.vhost = parts[3]; // user.vhost?
-		}).on('SJOIN', (head, msg, from) => {
+		}).on('CHGIDENT', (head, msg, from) => {
+            let newIdent = head[2];
+            let user = bot.getUser(head[1]);
+            if (user) user.ident = newIdent;
+        }).on('SJOIN', (head, msg, from) => {
             let ts = +head[1];
             let name = head[2];
             let modes = head[3];
@@ -470,12 +501,9 @@ ircbot.prototype = {
 			if (user.server === bot.config.sname) setImmediate(() => bot.join(user.uid, channel.name));
 		}).on('NICK',function(head,msg,from,raw) {
             let user = bot.getUser(from);
-			if (user) {
-                bot.server.clientsByNick.delete(user.nick.toLowerCase());
-                user.nick = head[1];
-                user.ts = +msg[0];
-                bot.server.clientsByNick.set(user.nick.toLowerCase(), user);
-			}
+            let newNick = head[1];
+            let ts = +msg[0];
+            bot._handleNickChange(user, newNick, ts);
 		}).on('QUIT',function(head,msg,from,raw) {
             let user = bot.getUser(from);
             if (user) bot._handleRemoveUser(user);

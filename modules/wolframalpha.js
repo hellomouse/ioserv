@@ -51,5 +51,5 @@ module.exports = function load(bot) {
       }
     }
     event.sendBack('\x02End of results');
-  }, 'wolframalpha');
+  }, 'wolframalpha', 1);
 };
