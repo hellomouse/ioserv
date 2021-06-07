@@ -6,12 +6,12 @@ module.exports = {
 	"port": 6697,
 	"sid":"042",
 	"password": "password",
+    // ioserv server description
 	"sdesc": "IoServ",
-	// "bname": "IoServ",
-	"bhost": "ioserv.freenode.ceo",
+    // ioserv server name
 	"sname": "ioserv.freenode.ceo",
-	"usid": "9EE",
-	"usname": "irc.freenode.ceo",
+    // expected remote server name
+    "usname": "irc.freenode.ceo",
 motd:`------ MoTD ------
 COLD WET SERVICES
 ------ EOF -------`,

@@ -14,19 +14,27 @@ function ircbot(config) {
 	this.encapmsg = newEvent();
 	this.userEvent = newEvent();
 	this.server = {
-            datapart: "",
-            clients: new Map(),
-            clientsByNick: new Map(),
-            servers: new Map(),
-            channels: new Map()
-        };
-	this.server.servers.set(config.sid, config.sname);
-	this.server.servers.set(config.usid, config.usname);
+        datapart: "",
+        remoteSid: null,
+        clients: new Map(),
+        clientsByNick: new Map(),
+        servers: new Map(),
+        channels: new Map(),
+        protoctl: new Map()
+    };
+	this.server.servers.set(config.sid, {
+        name: config.sname,
+        sid: config.sid,
+        description: config.sdesc,
+        version: 'IoServ',
+        links: new Set() // to be filled later
+    });
+	// this.server.servers.set(config.usid, config.usname);
 	this.client = {
-            users: new Map(),
-            uid:1,
-            capab: ["NOQUIT", "NICKv2", "SJOIN", "SJ3", "CLK", "TKLEXT", "TKLEXT2", "NICKIP", "ESVID", "MLOCK", "EXTSWHOIS"]
-        };
+        users: new Map(),
+        uid:1,
+        capab: ["NOQUIT", "NICKv2", "SJOIN", "SJ3", "CLK", "TKLEXT", "TKLEXT2", "NICKIP", "ESVID", "MLOCK", "EXTSWHOIS"]
+    };
 	this.config = config;
 	this.cmds = Object.create(null);
 	this.cmdgroups = Object.create(null);
@@ -42,8 +50,9 @@ function ircbot(config) {
 	this.ircsock.on('connect', function() {
 		console.log('Connected to server!');
 		bot.send(`PASS :${config.password}`);
-        bot.send(`PROTOCTL EAUTH=${config.sname} SID=${config.sid}`);
-		bot.send(`PROTOCTL :${bot.client.capab.join(" ")}`);
+        bot.send(`PROTOCTL EAUTH=${config.sname},5002 SID=${config.sid}`);
+        bot.send(`PROTOCTL SERVERS=${config.sid}`);
+		bot.send(`PROTOCTL ${bot.client.capab.join(" ")}`);
 		bot.send(`SERVER ${config.sname} 1 :${config.sdesc}`);
 	}).on('data', function(data) {
 		var data = data.toString('utf-8');
@@ -182,6 +191,16 @@ ircbot.prototype = {
         if (typeof nickOrUID === 'object') return this.server.clients.get(nickOrUID.uid) || null;
         if (nickOrUID[0].match(/\d/)) return this.server.clients.get(nickOrUID) || null;
         else return this.getUserByNick(nickOrUID);
+    },
+    getServer(nameOrSID) {
+        if (nameOrSID[0].match(/\d/) && nameOrSID.length === 3) {
+            return this.server.servers.get(nameOrSID) || null;
+        }
+        let lowerName = nameOrSID.toLowerCase();
+        for (let [_sid, server] of this.server.servers) {
+            if (server.name.toLowerCase() === lowerName) return server;
+        }
+        return null;
     },
     changeHost(nickOrUID, host) {
         if (host.match(/\s/)) throw new Error('invalid hostname');
@@ -375,8 +394,44 @@ ircbot.prototype = {
 
 		this.servmsg.on('PING', function(head,msg,from) {
 			bot.send(`:${msg[1] || bot.config.sname} PONG ${msg[1]} ${msg[0]}`);
-		}).on('EOS', (head, msg, from) => {
-            if (from !== bot.config.usid) return;
+		}).on('PROTOCTL', (head, msg, from) => {
+            let pairs = head.slice(1);
+            for (let pair of pairs) {
+                let split = pair.split('=');
+                if (split.length > 2) split[1] = split.slice(1).join('=');
+                bot.server.protoctl.set(split[0], split[1]);
+            }
+        }).on('SERVER', (head, msg, from) => {
+            let remoteName = head[1];
+            if (remoteName.toLowerCase() !== bot.config.usname.toLowerCase()) {
+                console.error(`[ERROR] Remote server name mismatch: ${remoteName} is not ${bot.config.usname}`);
+                process.exit(10);
+            }
+            let sid = bot.server.protoctl.get('SID');
+            if (!sid) throw new Error('expected PROTOCTL to have SID');
+            bot.server.remoteSid = sid;
+            let remoteEAUTH = bot.server.protoctl.get('EAUTH');
+            let version = 'unknown';
+            if (remoteEAUTH) {
+                let parts = remoteEAUTH.split(',');
+                if (parts[3]) version = parts[3];
+            }
+            let remoteServer = {
+                name: remoteName,
+                sid,
+                description: msg.slice(1).join(' '),
+                version,
+                links: new Set([bot.config.sid])
+            };
+            bot.server.servers.set(sid, remoteServer);
+            // add server as own link
+            bot.server.servers.get(bot.config.sid).links.add(sid);
+        }).on('SINFO', (head, msg, from) => {
+            let server = bot.server.servers.get(from);
+            if (!server) return;
+            server.version = msg.join(' ');
+        }).on('EOS', (head, msg, from) => {
+            if (from !== bot.server.remoteSid) return;
             bot.config.botUser.uid = bot.addUser(bot.config.botUser);
             bot.send(`:${bot.config.sid} EOS`);
 			bot.events.emit('regdone');
@@ -425,13 +480,34 @@ ircbot.prototype = {
 			};
             if (client.vhost === '*') client.vhost = null;
             if (client.chost === '*') client.chost = null;
-            client.server = bot.server.servers.get(client.uid.slice(0, 3));
+            client.server = bot.server.servers.get(client.uid.slice(0, 3))?.name;
             bot.server.clients.set(client.uid, client);
             bot.server.clientsByNick.set(client.nick.toLowerCase(), client);
             bot.events.emit('newUser', client);
 		}).on('SID', function(head,msg,from) {
-			bot.server.servers.set(head[3], head[1]);
-		}).on('CHGHOST',function(head,msg,from,raw) {
+            let fromServer = bot.server.servers.get(from);
+            if (!fromServer) return;
+            let newServer = {
+                name: head[1],
+                sid: head[3],
+                description: msg.join(' '),
+                version: 'unknown',
+                links: new Set([fromServer.sid])
+            };
+            fromServer.links.add(newServer.sid);
+			bot.server.servers.set(newServer.sid, newServer);
+		}).on('SQUIT', (head, msg, from) => {
+            let target = head[1];
+            for (let [sid, server] of bot.server.servers) {
+                if (server.name === target) {
+                    for (let link of server.links) {
+                        bot.server.servers.get(link).delete(sid);
+                    }
+                    bot.server.servers.delete(sid);
+                    break;
+                }
+            }
+        }).on('CHGHOST',function(head,msg,from,raw) {
             // is this used in unreal? yes
 			var parts = raw.split(" ");
             let user = bot.getUser(parts[2]);
