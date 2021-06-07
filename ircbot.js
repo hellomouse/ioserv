@@ -429,7 +429,7 @@ ircbot.prototype = {
         }).on('SINFO', (head, msg, from) => {
             let server = bot.server.servers.get(from);
             if (!server) return;
-            server.version = msg.join(' ');
+            server.version = msg.join(' ') || head[6];
         }).on('EOS', (head, msg, from) => {
             if (from !== bot.server.remoteSid) return;
             bot.config.botUser.uid = bot.addUser(bot.config.botUser);

@@ -41,7 +41,8 @@ module.exports = function load(bot) {
         let push = s => g += '\n  ' + s;
 
         for (let server of bot.server.servers.values()) {
-            push(`"${server.sid}" [label = "${server.name} (${server.sid})\\n${server.description}\\n${server.version}"]`);
+            push(`"${server.sid}" [label = "${server.name} (${server.sid})\\n` +
+                `${server.description}\\n${server.version}", id = "\\N"]`);
         }
 
         let links = findLinks();
