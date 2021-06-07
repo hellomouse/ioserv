@@ -501,7 +501,7 @@ ircbot.prototype = {
             for (let [sid, server] of bot.server.servers) {
                 if (server.name === target) {
                     for (let link of server.links) {
-                        bot.server.servers.get(link).delete(sid);
+                        bot.server.servers.get(link)?.links.delete(sid);
                     }
                     bot.server.servers.delete(sid);
                     break;
