@@ -17,6 +17,7 @@ const util = require('util');
  * @property {Set<Server>} children
  * @property {Server | null} parent
  * @property {Set<Client>} clients
+ * @property {Map<string, string>} metadata
  */
 
 /**
@@ -35,6 +36,7 @@ const util = require('util');
  * @property {string | null} account
  * @property {Set<string>} channels
  * @property {Map<string, string>} metadata
+ * @property {Map<string, string>} trusted_metadata
  * @property {Map<string, string>} metadata_membership
  */
 
@@ -188,9 +190,9 @@ ircbot.prototype = {
     this.client.users.delete(uid); // may not exist
     this.server.clientsByNick.delete(client.nick.toLowerCase());
   },
-  kill(name,reason,src) {
+  kill(name, reason, src) {
     let user = this.getUser(name);
-    if (user.server === this.config.sname) return false;
+    if (user.server === this.client.ownServer) return false;
     if (!user) return false;
     if (!reason || !reason.length) reason = 'Killed';
     src = src || this.config.botUser.uid;
@@ -231,6 +233,13 @@ ircbot.prototype = {
       if (server.name.toLowerCase() === lowerName) return server;
     }
     return null;
+  },
+  isSID(str) {
+    return /^\d\w\w$/.test(str);
+  },
+  isTrustedServer(sid) { // Only trust the parent server
+    if (!this.isSID(sid)) return false; // Not even a server
+    return this.client.ownServer.parent?.sid === sid;
   },
   changeHost(nickOrUID, host) {
     if (host.match(/\s/)) throw new Error('invalid hostname');
@@ -286,6 +295,7 @@ ircbot.prototype = {
       account: null,
       channels: new Set(),
       metadata: new Map(), // varname=>value metadata set by MD
+      trusted_metadata: new Map(),
       metadata_membership: new Map(), // channel_varname=>value membership metadata set by MD
     };
     server?.clients.add(c);
@@ -308,7 +318,8 @@ ircbot.prototype = {
       name, sid, description, version,
       children: new Set(),
       parent: null, // to be filled later
-      clients: new Set()
+      clients: new Set(),
+      metadata: new Map()
     };
     this.server.servers.set(s.sid, s);
     return s;
@@ -369,7 +380,7 @@ ircbot.prototype = {
     if (!nick) throw new Error('nick is required');
     let prevUser = this.getUser(nick);
     if (prevUser) {
-      if (prevUser.server === this.config.sname) throw new Error('duplicate nick');
+      if (prevUser.server === this.client.ownServer) throw new Error('duplicate nick');
       else this.kill(nick, 'y u steal ioserv nick :(', '042');
     }
     let uid = this.makeUID();
@@ -397,7 +408,7 @@ ircbot.prototype = {
   changeNick(uidOrNick, newNick, force = false) {
     if (newNick.match(/\s/)) throw new Error('invalid nick');
     let user = this.getUser(uidOrNick);
-    if (!user || user.server !== this.config.sname) throw new Error('nonlocal user');
+    if (!user || user.server !== this.client.ownServer) throw new Error('nonlocal user');
     let collided = this.getUser(newNick);
     if (collided) {
       if (!force) throw new Error('nick collision');
@@ -408,9 +419,9 @@ ircbot.prototype = {
     this.send(`:${user.uid} NICK ${newNick} ${ts}`);
     this._handleNickChange(user, newNick, ts);
   },
-  join(uidOrNick,chan) {
+  join(uidOrNick, chan) {
     let user = this.getUser(uidOrNick);
-    if (!user || user.server !== this.config.sname) return false;
+    if (!user || user.server !== this.client.ownServer) return false;
     let channel = this.getChannel(chan);
     if (!channel) channel = this._makeChannel(chan, this.getTS());
     if (channel.users.has(user.uid)) return false;
@@ -419,9 +430,9 @@ ircbot.prototype = {
     this.send(`:${this.config.sid} SJOIN ${channel.ts} ${channel.name} :${user.uid}`);
     return true;
   },
-  part(uidOrNick,chan, reason = '') {
+  part(uidOrNick, chan, reason = '') {
     let user = this.getUser(uidOrNick);
-    if (!user || user.server !== this.config.sname) return;
+    if (!user || user.server !== this.client.ownServer) return;
     let channel = this.getChannel(chan);
     this.send(`:${user.uid} PART ${chan} :${reason}`);
     this._handleChannelPart(channel, user); 
@@ -632,29 +643,38 @@ ircbot.prototype = {
       let type = head[1];
       switch (type) {
         case 'client': {
-          let user = bot.getUser(head[2]);
-          if (!user) return;
-          user.metadata.set(head[3], msg);
+          if (bot.isSID(head[2])) {
+            let server = bot.getServer(head[2]);
+            if (!server) return;
+            server.metadata.set(head[3], msg.join(' '));
+          } else {
+            let user = bot.getUser(head[2]);
+            if (!user) return;
+            user.metadata.set(head[3], msg.join(' '));
+            if (bot.isTrustedServer(from)) {
+              user.trusted_metadata.set(head[3], msg.join(' '));
+            }
+          }
           break;
         }
         case 'channel': {
           let channel = bot.getChannel(head[2]);
           if (!channel) return;
-          user.metadata.set(head[3], msg);
+          channel.metadata.set(head[3], msg.join(' '));
           break;
         }
         case 'member': {
           let channel = bot.getChannel(head[2]);
           if (!channel) return;
           if (!channel.member_metadata.has(head[3])) channel.member_metadata.set(head[3], new Map());
-          channel.metadata_membership.get(head[3]).set(head[4], msg);
+          channel.metadata_membership.get(head[3]).set(head[4], msg.join(' '));
           break;
         }
         case 'membership': {
           let user = bot.getUser(head[2]);
           if (!user) return;
           if (!user.metadata_membership.has(head[3])) user.metadata_membership.set(head[3], new Map());
-          user.metadata_membership.get(head[3]).set(head[4], msg);
+          user.metadata_membership.get(head[3]).set(head[4], msg.join(' '));
           break;
         }
       }
@@ -668,7 +688,7 @@ ircbot.prototype = {
       let channel = bot.getChannel(head[1]);
       if (!user || !channel) return;
       bot._handleChannelPart(channel, user);
-      if (user.server === bot.config.sname) setImmediate(() => bot.join(user.uid, channel.name));
+      if (user.server === bot.client.ownServer) setImmediate(() => bot.join(user.uid, channel.name));
     }).on('NICK',function(head,msg,from,raw) {
       let user = bot.getUser(from);
       let newNick = head[1];
@@ -680,7 +700,7 @@ ircbot.prototype = {
     }).on('KILL',function(head,msg,from,raw) {
       let user = bot.getUser(head[1]);
       if (!user) return;
-      if (user.server === bot.config.sname) {
+      if (user.server === bot.client.ownServer) {
         let channels = [...user.channels];
         queueMicrotask(() => {
           let newuid = bot.addUser(user);
@@ -691,6 +711,6 @@ ircbot.prototype = {
       bot._handleRemoveClient(user);
     });
   }
-}
+};
 
 module.exports = ircbot;
