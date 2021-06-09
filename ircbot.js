@@ -225,7 +225,14 @@ ircbot.prototype = {
     if (nickOrUID[0].match(/\d/)) return this.server.clients.get(nickOrUID) || null;
     else return this.getUserByNick(nickOrUID);
   },
+  /**
+   * Get server
+   * @param {string | Server} nameOrSID
+   * @return {Server | null}
+   */
   getServer(nameOrSID) {
+    if (!nameOrSID) throw new Error('argument cannot be undefined');
+    if (typeof nameOrSID === 'object') return this.server.servers.get(nameOrSID.sid) || null;
     if (nameOrSID[0].match(/\d/) && nameOrSID.length === 3) {
       return this.server.servers.get(nameOrSID) || null;
     }
@@ -254,6 +261,12 @@ ircbot.prototype = {
     let user = this.getUser(nickOrUID);
     user.ident = ident;
     this.send(`:${this.config.sid} CHGIDENT ${user.uid} ${user.ident}`);
+  },
+  squit(name, reason = '') {
+    let server = this.getServer(name);
+    if (!server) return;
+    this.send(`SQUIT ${server.name} :${reason}`);
+    this._handleRemoveServer(server);
   },
   getChannel(name) {
     return this.server.channels.get(name.toLowerCase()) || null;
@@ -605,17 +618,8 @@ ircbot.prototype = {
       newServer.parent = fromServer;
       fromServer.children.add(newServer);
     }).on('SQUIT', (head, msg, from) => {
-      // FIXME: users need to be associated to servers and removed by SQUIT
-      // FIXME: servers behind the target of SQUIT need to be removed
       let target = bot.getServer(head[1]);
       bot._handleRemoveServer(target);
-      // TODO: reimplement SQUIT
-      /*
-            for (let link of server.links) {
-                bot.server.servers.get(link)?.links.delete(sid);
-            }
-            bot.server.servers.delete(sid);
-            */
     }).on('CHGHOST',function(head,msg,from,raw) {
       // is this used in unreal? yes
       var parts = raw.split(" ");
