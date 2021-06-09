@@ -145,8 +145,8 @@ ircbot.prototype = {
     },
 	kill(name,reason,src) {
         let user = this.getUser(name);
-        if (user.server === this.config.sname) return false;
         if (!user) return false;
+        if (user.server.name === this.config.sname) return false;
         if (!reason || !reason.length) reason = 'Killed';
 		src = src || this.config.botUser.uid;
 		this.send(`:${src} KILL ${user.uid} :${reason}`);
@@ -278,7 +278,7 @@ ircbot.prototype = {
         if (!nick) throw new Error('nick is required');
         let prevUser = this.getUser(nick);
         if (prevUser) {
-            if (prevUser.server === this.config.sname) throw new Error('duplicate nick');
+            if (prevUser.server.name === this.config.sname) throw new Error('duplicate nick');
             else this.kill(nick, 'y u steal ioserv nick :(', '042');
         }
 		let uid = this.makeUID();
@@ -308,7 +308,7 @@ ircbot.prototype = {
     changeNick(uidOrNick, newNick, force = false) {
         if (newNick.match(/\s/)) throw new Error('invalid nick');
         let user = this.getUser(uidOrNick);
-        if (!user || user.server !== this.config.sname) throw new Error('nonlocal user');
+        if (!user || user.server.name !== this.config.sname) throw new Error('nonlocal user');
         let collided = this.getUser(newNick);
         if (collided) {
             if (!force) throw new Error('nick collision');
@@ -321,7 +321,7 @@ ircbot.prototype = {
     },
 	join(uidOrNick,chan) {
         let user = this.getUser(uidOrNick);
-        if (!user || user.server !== this.config.sname) return false;
+        if (!user || user.server.name !== this.config.sname) return false;
         let channel = this.getChannel(chan);
         if (!channel) channel = this._makeChannel(chan, this.getTS());
         if (channel.users.has(user.uid)) return false;
@@ -332,7 +332,7 @@ ircbot.prototype = {
 	},
 	part(uidOrNick,chan, reason = '') {
         let user = this.getUser(uidOrNick);
-        if (!user || user.server !== this.config.sname) return;
+        if (!user || user.server.name !== this.config.sname) return;
         let channel = this.getChannel(chan);
 		this.send(`:${user.uid} PART ${chan} :${reason}`);
         this._handleChannelPart(channel, user); 
@@ -588,7 +588,7 @@ ircbot.prototype = {
             let channel = bot.getChannel(head[1]);
             if (!user || !channel) return;
             bot._handleChannelPart(channel, user);
-			if (user.server === bot.config.sname) setImmediate(() => bot.join(user.uid, channel.name));
+			if (user.server.name === bot.config.sname) setImmediate(() => bot.join(user.uid, channel.name));
 		}).on('NICK',function(head,msg,from,raw) {
             let user = bot.getUser(from);
             let newNick = head[1];
@@ -600,7 +600,7 @@ ircbot.prototype = {
 		}).on('KILL',function(head,msg,from,raw) {
             let user = bot.getUser(head[1]);
             if (!user) return;
-			if (user.server === bot.config.sname) {
+			if (user.server.name === bot.config.sname) {
                 let channels = [...user.channels];
 				queueMicrotask(() => {
                     let newuid = bot.addUser(user);
