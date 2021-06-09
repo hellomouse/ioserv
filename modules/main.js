@@ -198,5 +198,8 @@ module.exports = function(bot, config) {
         let chan = event.args[0];
         bot.send(`:${bot.config.botUser.uid} INVITE ${event.rhost.uid} ${chan} 0`);
     }, '(level 11) Get an invite to a channel', 11);
+    bot.addCmd('getuid', 'main', event => {
+        event.reply(event.rhost.uid);
+    }, 'Get your own UID');
 }
 

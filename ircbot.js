@@ -36,7 +36,6 @@ const util = require('util');
  * @property {string | null} account
  * @property {Set<string>} channels
  * @property {Map<string, string>} metadata
- * @property {Map<string, string>} trusted_metadata
  * @property {Map<string, string>} metadata_membership
  * @property {string | null} sasl
  */
@@ -57,7 +56,8 @@ function ircbot(config) {
     channels: new Map(),
     protoctl: new Map(),
     /** @type {Server | null} */
-    remoteServer: null
+    remoteServer: null,
+    preRegistrationSASL: new Map(),
   };
   let ownServer = this._makeServer({
     name: config.sname,
@@ -315,21 +315,20 @@ ircbot.prototype = {
    * @param {string} [descriptor.vhost]
    * @param {string} [descriptor.chost]
    * @param {string} [descriptor.ip]
+   * @param {string} [descriptor.sasl]
    * @return {Client}
    */
   _makeClient({
     uid, nick, ident, host, realname, modes, ts, server,
-    vhost = '*', chost = '*', ip = '*'
+    vhost = '*', chost = '*', ip = '*', sasl = null
   }) {
     /** @type {Client} */
     let c = {
-      uid, nick, ident, host, realname, modes, ts, server, vhost, chost, ip,
+      uid, nick, ident, host, realname, modes, ts, server, vhost, chost, ip, sasl,
       account: null,
       channels: new Set(),
       metadata: new Map(), // varname=>value metadata set by MD
-      trusted_metadata: new Map(),
       metadata_membership: new Map(), // channel_varname=>value membership metadata set by MD
-      sasl: null
     };
     server?.clients.add(c);
     this.server.clients.set(uid, c);
@@ -618,8 +617,10 @@ ircbot.prototype = {
         chost: head[10],
         ip: head[11],
         realname: msg.join(' '),
-        server: bot.server.servers.get(sid)
+        server: bot.server.servers.get(sid),
+        sasl: bot.server.preRegistrationSASL.get(head[6]) || null
       });
+      bot.server.preRegistrationSASL.delete(head[6]);
       if (client.vhost === '*') client.vhost = null;
       if (client.chost === '*') client.chost = null;
       bot.events.emit('newUser', client);
@@ -676,9 +677,6 @@ ircbot.prototype = {
             let user = bot.getUser(head[2]);
             if (!user) return;
             user.metadata.set(head[3], msg.join(' '));
-            if (bot.isTrustedServer(from)) {
-              user.trusted_metadata.set(head[3], msg.join(' '));
-            }
           }
           break;
         }
@@ -704,16 +702,21 @@ ircbot.prototype = {
         }
       }
     }).on("SASL", (head, msg, from) => {
-      if (!bot.isTrustedServer(from)) return; // No tricks.
+      if (!bot.isTrustedServer(from)) {
+        bot.send(`:${bot.config.sid} SASL ${from} ${head[2]} D F`);
+      } // No tricks.
       let user = bot.getUser(head[2]);
-      if (!user) return; // Invalid target
       switch (head[3]) {
         case 'H': break; // User IP, we already know that and don't care
         case 'S': // Start SASL
-          bot.send(`:${bot.config.sid} SASL ${from} ${head[2]} C ${from} +`);
+          bot.send(`:${bot.config.sid} SASL ${from} ${head[2]} C +`);
           break;
         case 'C':
-          user.sasl = head[4];
+          if (user) {
+            user.sasl = head[4];
+          } else {
+            bot.server.preRegistrationSASL.set(head[2], head[4]);
+          }
           bot.send(`:${bot.config.sid} SASL ${from} ${head[2]} D S`);
           break;
       }
