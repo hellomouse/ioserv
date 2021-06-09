@@ -19,6 +19,7 @@ module.exports = function load(bot) {
     }
     let router = express.Router();
 
+    // TODO: graph dies sometimes, probably sid handler
     function findLinks() {
         let visited = new Set();
         let links = [];
@@ -67,7 +68,7 @@ module.exports = function load(bot) {
             endpoints: [
                 '/graph/raw',
                 '/graph/json',
-                '/graph?format=&renderer='
+                `/graph?format={${[...GRAPH_FORMATS].join()}}&renderer={${[...GRAPH_RENDERERS].join()}}`
             ]
         }, null, 2));
     });
@@ -92,15 +93,24 @@ module.exports = function load(bot) {
             return;
         }
         res.type(format);
-        // -Goverlap=scale results in MASSIVE graphs, removed for now
         let graphviz = childProcess.spawn('dot', ['-T' + format, '-Goverlap=prism', '-Gsplines=spline'], {
             argv0: renderer,
             stdio: ['pipe', 'pipe', 'pipe']
         });
         graphviz.stdin.write(createGraphviz());
         graphviz.stdin.end();
+        graphviz.stderr.pipe(res, { end: false });
         graphviz.stdout.pipe(res);
-        graphviz.stderr.pipe(res);
+        /* imagemagick uses too many resources
+        if (format === 'png') {
+            let im = childProcess.spawn('convert', ['-define', 'png:compression-filter=2', 'png:-', 'png:-']);
+            graphviz.stdout.pipe(im.stdin);
+            im.stdout.pipe(res);
+            im.stderr.pipe(res, { end: false });
+        } else {
+            graphviz.stdout.pipe(res);
+        }
+        */
     });
 
     return { findLinks, createGraphviz, app, router };
