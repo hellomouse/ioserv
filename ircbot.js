@@ -48,6 +48,7 @@ function ircbot(config) {
   this.privmsg = new EventEmitter(); // message to channel/user, not currently useful yet
   this.encapmsg = new EventEmitter();
   this.userEvent = new EventEmitter();
+  let bot = this;
   this.server = {
     datapart: "",
     clients: new Map(),
@@ -69,14 +70,16 @@ function ircbot(config) {
     users: new Map(),
     uid: 1,
     capab: ["NOQUIT", "NICKv2", "SJOIN", "SJ3", "CLK", "TKLEXT", "TKLEXT2", "NICKIP", "ESVID", "MLOCK", "EXTSWHOIS"],
-    ownServer
+    ownServer,
+    get sid() {
+      return bot.client.ownServer.sid;
+    }
   };
   this.client.ownServer = ownServer;
   this.config = config;
   this.cmds = Object.create(null);
   this.cmdgroups = Object.create(null);
   this.channels = Object.create(null);
-  let bot = this;
   this.ctcp = Object.create(null);
   this.sendMsgQueue = [];
   this.sendCount = 0;
@@ -92,8 +95,8 @@ function ircbot(config) {
   this.ircsock.on('connect', function() {
     console.log('Connected to server!');
     bot.send(`PASS :${config.password}`);
-    bot.send(`PROTOCTL EAUTH=${config.sname},5002 SID=${config.sid}`);
-    bot.send(`PROTOCTL SERVERS=${config.sid}`);
+    bot.send(`PROTOCTL EAUTH=${config.sname},5002 SID=${bot.client.sid}`);
+    bot.send(`PROTOCTL SERVERS=${bot.client.sid}`);
     bot.send(`PROTOCTL ${bot.client.capab.join(" ")}`);
     bot.send(`SERVER ${config.sname} 1 :${config.sdesc}`);
   }).on('data', function(data) {
@@ -161,11 +164,11 @@ ircbot.prototype = {
     this.events.emit('msg');
   },
   mode(chan,mode,src) {
-    src = src || this.config.sid;
+    src = src || this.client.sid;
     this.send(`:${src} MODE ${chan} ${mode}`);
   },
   skick(chan,nick,reason) {
-    this.send(':'+this.config.sid+' KICK '+chan+' '+nick+' :'+reason);
+    this.send(':'+this.client.sid+' KICK '+chan+' '+nick+' :'+reason);
   },
   kick(chan,nick,reason,src) {
     let user = this.getUser(nick);
@@ -259,13 +262,13 @@ ircbot.prototype = {
     if (host.match(/\s/)) throw new Error('invalid hostname');
     let user = this.getUser(nickOrUID);
     user.host = host;
-    this.send(`:${this.config.sid} CHGHOST ${user.uid} :${host}`);
+    this.send(`:${this.client.sid} CHGHOST ${user.uid} :${host}`);
   },
   changeIdent(nickOrUID, ident) {
     if (ident.match(/s/)) throw new Error('invalid ident');
     let user = this.getUser(nickOrUID);
     user.ident = ident;
-    this.send(`:${this.config.sid} CHGIDENT ${user.uid} ${user.ident}`);
+    this.send(`:${this.client.sid} CHGIDENT ${user.uid} ${user.ident}`);
   },
   squit(name, reason = '') {
     let server = this.getServer(name);
@@ -393,7 +396,7 @@ ircbot.prototype = {
   makeUID() {
     // TODO: check if uid already exists, extremely unlikely but meh
     let uid = (this.client.uid++%1e6).toString(16);
-    return this.config.sid+"0".repeat(Math.abs(6-uid.length))+uid;
+    return this.client.sid+"0".repeat(Math.abs(6-uid.length))+uid;
   },
   /**
    * Get current TS
@@ -418,7 +421,7 @@ ircbot.prototype = {
     }
     let uid = this.makeUID();
     let ts = this.getTS();
-    this.send(`:${this.config.sid} UID ${nick} 0 ${ts} ${ident} ${host} ${uid} 0 +${modes} * * * :${realname}`);
+    this.send(`:${this.client.sid} UID ${nick} 0 ${ts} ${ident} ${host} ${uid} 0 +${modes} * * * :${realname}`);
     let client = this._makeClient({
       uid,
       nick,
@@ -460,7 +463,7 @@ ircbot.prototype = {
     if (channel.users.has(user.uid)) return false;
     channel.users.set(user.uid, '');
     user.channels.add(channel.name);
-    this.send(`:${this.config.sid} SJOIN ${channel.ts} ${channel.name} :${user.uid}`);
+    this.send(`:${this.client.sid} SJOIN ${channel.ts} ${channel.name} :${user.uid}`);
     return true;
   },
   part(uidOrNick, chan, reason = '') {
@@ -577,7 +580,7 @@ ircbot.prototype = {
     }).on('EOS', (head, msg, from) => {
       if (from !== bot.server.remoteServer.sid) return;
       bot.config.botUser.uid = bot.addUser(bot.config.botUser);
-      bot.send(`:${bot.config.sid} EOS`);
+      bot.send(`:${bot.client.sid} EOS`);
       bot.events.emit('regdone');
     }).on('PRIVMSG', function(head,msg,from,raw) {
       var event = new bot.PrivateMessageEvent(bot,head,msg,from,raw);
@@ -621,7 +624,7 @@ ircbot.prototype = {
         sasl: bot.server.preRegistrationSASL.get(head[6]) || null
       });
       if (client.sasl) {
-        const [authz, auhtn, passwd] = Buffer.from(client.sasl, "base64").toString().split('\0');
+        const [authz, authn, passwd] = Buffer.from(client.sasl, "base64").toString().split('\0');
         if (bot.config.userLogin[authz] && bot.config.userLogin[authz] === passwd) client.account = authz;
         bot.server.preRegistrationSASL.delete(head[6]);
       }
@@ -707,23 +710,23 @@ ircbot.prototype = {
       }
     }).on('SASL', (head, msg, from) => {
       if (!bot.isTrustedServer(from)) {
-        bot.send(`:${bot.config.sid} SASL ${from} ${head[2]} D F`);
+        bot.send(`:${bot.client.sid} SASL ${from} ${head[2]} D F`);
       } // No tricks.
       let user = bot.getUser(head[2]);
       switch (head[3]) {
         case 'H': break; // User IP, we already know that and don't care
         case 'S': // Start SASL
-          bot.send(`:${bot.config.sid} SASL ${from} ${head[2]} C +`);
+          bot.send(`:${bot.client.sid} SASL ${from} ${head[2]} C +`);
           break;
         case 'C':
           if (user) {
             user.sasl = head[4];
-            const [authz, auhtn, passwd] = Buffer.from(cuser.sasl, "base64").toString().split('\0');
+            const [authz, authn, passwd] = Buffer.from(user.sasl, "base64").toString().split('\0');
             if (bot.config.userLogin[authz] && bot.config.userLogin[authz] === passwd) user.account = authz;
           } else {
             bot.server.preRegistrationSASL.set(head[2], head[4]);
           }
-          bot.send(`:${bot.config.sid} SASL ${from} ${head[2]} D S`);
+          bot.send(`:${bot.client.sid} SASL ${from} ${head[2]} D S`);
           break;
       }
     }).on("MOTD", (head, msg, from) => {

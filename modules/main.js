@@ -118,7 +118,7 @@ module.exports = function(bot, config) {
         }
         console.log('[NOTICE] Restart requested by ' + event.host[0] + ': ' + event.args.join(' '));
         bot.sendMsg(config.logchannel, 'Restart requested by ' + event.host[0] + ': ' + event.args.join(' '));
-        bot.send(`SQUIT ${bot.config.sid} :Restart requested by ${event.host[0]}: ${event.args.join(' ')}`);
+        bot.send(`SQUIT ${bot.client.sid} :Restart requested by ${event.host[0]}: ${event.args.join(' ')}`);
         setTimeout(() => {
             process.exit(11);
         }, 3000);
@@ -130,7 +130,7 @@ module.exports = function(bot, config) {
         }
         console.log('[NOTICE] Quit requested by ' + event.host[0] + ': ' + event.args.join(' '));
         bot.sendMsg(config.logchannel, 'Quit requested by ' + event.host[0] + ': ' + event.args.join(' '));
-        bot.send(`SQUIT ${bot.config.sid} :Shutdown requested by ${event.host[0]}: ${event.args.join(' ')}`);
+        bot.send(`SQUIT ${bot.client.sid} :Shutdown requested by ${event.host[0]}: ${event.args.join(' ')}`);
         setTimeout(() => {
             process.exit(10);
         }, 3000);
