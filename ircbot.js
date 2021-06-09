@@ -620,7 +620,11 @@ ircbot.prototype = {
         server: bot.server.servers.get(sid),
         sasl: bot.server.preRegistrationSASL.get(head[6]) || null
       });
-      bot.server.preRegistrationSASL.delete(head[6]);
+      if (client.sasl) {
+        const [authz, auhtn, passwd] = Buffer.from(client.sasl, "base64").toString().split('\0');
+        if (bot.config.userLogin[authz] && bot.config.userLogin[authz] === passwd) client.account = authz;
+        bot.server.preRegistrationSASL.delete(head[6]);
+      }
       if (client.vhost === '*') client.vhost = null;
       if (client.chost === '*') client.chost = null;
       bot.events.emit('newUser', client);
@@ -701,7 +705,7 @@ ircbot.prototype = {
           break;
         }
       }
-    }).on("SASL", (head, msg, from) => {
+    }).on('SASL', (head, msg, from) => {
       if (!bot.isTrustedServer(from)) {
         bot.send(`:${bot.config.sid} SASL ${from} ${head[2]} D F`);
       } // No tricks.
@@ -714,6 +718,8 @@ ircbot.prototype = {
         case 'C':
           if (user) {
             user.sasl = head[4];
+            const [authz, auhtn, passwd] = Buffer.from(cuser.sasl, "base64").toString().split('\0');
+            if (bot.config.userLogin[authz] && bot.config.userLogin[authz] === passwd) user.account = authz;
           } else {
             bot.server.preRegistrationSASL.set(head[2], head[4]);
           }
