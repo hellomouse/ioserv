@@ -352,6 +352,7 @@ ircbot.prototype = {
     }
     // detach self from tree
     server.parent?.children.delete(server);
+    this.server.servers.delete(server.sid);
   },
   /**
    * Makes new UID
