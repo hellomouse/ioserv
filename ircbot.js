@@ -238,8 +238,9 @@ ircbot.prototype = {
     return /^\d\w\w$/.test(str);
   },
   isTrustedServer(sid) { // Only trust the parent server
-    if (!this.isSID(sid)) return false; // Not even a server
-    return this.client.ownServer.parent?.sid === sid;
+            let server = this.getServer(server);
+        if (!server) return false; // Not even a server
+        return this.client.ownServer.parent.sid == server.sid;
   },
   changeHost(nickOrUID, host) {
     if (host.match(/\s/)) throw new Error('invalid hostname');
@@ -297,6 +298,7 @@ ircbot.prototype = {
       metadata: new Map(), // varname=>value metadata set by MD
       trusted_metadata: new Map(),
       metadata_membership: new Map(), // channel_varname=>value membership metadata set by MD
+      sasl: null
     };
     server?.clients.add(c);
     this.server.clients.set(uid, c);
@@ -679,6 +681,19 @@ ircbot.prototype = {
           break;
         }
       }
+    }).on("SASL",function(head,msg,from){
+	if (!bot.isTrustedServer(from)) return; // No tricks.
+            let user = bot.getUser(head[2]);
+            if (!user) return; // Invalid target
+            switch (head[3]) {
+                case 'H': break // User IP, we already know that and don't care
+                case 'S': // Start SASL
+                    bot.send(`:${bot.config.sid} SASL ${from} ${head[2]} C ${from} +`);
+                    break;
+                case 'C':
+                    user.sasl = msg[4];
+                    break;
+            }
     }).on("MOTD",function(head,msg,from){
       let motd = bot.config.motd.split("\n");
       for(let line of motd) {
