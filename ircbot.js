@@ -239,9 +239,9 @@ ircbot.prototype = {
     return /^\d\w\w$/.test(str);
   },
   isTrustedServer(serv) { // Only trust the parent server
-            let server = this.getServer(serv);
-        if (!server) return false; // Not even a server
-        return this.client.ownServer.parent.sid == server.sid;
+    let server = this.getServer(serv);
+    if (!server) return false; // Not even a server
+    return this.client.ownServer.parent?.sid === server.sid;
   },
   changeHost(nickOrUID, host) {
     if (host.match(/\s/)) throw new Error('invalid hostname');
@@ -682,23 +682,23 @@ ircbot.prototype = {
           break;
         }
       }
-    }).on("SASL",function(head,msg,from){
-	if (!bot.isTrustedServer(from)) return; // No tricks.
-            let user = bot.getUser(head[2]);
-            if (!user) return; // Invalid target
-            switch (head[3]) {
-                case 'H': break // User IP, we already know that and don't care
-                case 'S': // Start SASL
-                    bot.send(`:${bot.config.sid} SASL ${from} ${head[2]} C ${from} +`);
-                    break;
-                case 'C':
-                    user.sasl = head[4];
-                    bot.send(`:${bot.config.sid} SASL ${from} ${head[2]} D S`);
-                    break;
-            }
-    }).on("MOTD",function(head,msg,from){
+    }).on("SASL", (head, msg, from) => {
+      if (!bot.isTrustedServer(from)) return; // No tricks.
+      let user = bot.getUser(head[2]);
+      if (!user) return; // Invalid target
+      switch (head[3]) {
+        case 'H': break; // User IP, we already know that and don't care
+        case 'S': // Start SASL
+          bot.send(`:${bot.config.sid} SASL ${from} ${head[2]} C ${from} +`);
+          break;
+        case 'C':
+          user.sasl = head[4];
+          bot.send(`:${bot.config.sid} SASL ${from} ${head[2]} D S`);
+          break;
+      }
+    }).on("MOTD", (head, msg, from) => {
       let motd = bot.config.motd.split("\n");
-      for(let line of motd) {
+      for (let line of motd) {
         bot.send(`372 ${from} :${line}`);
       }
     }).on('KICK',function(head,msg,from) {

@@ -83,6 +83,7 @@ module.exports = function load(bot) {
         clients: server.clients.size
       };
     }
+    res.set('Access-Control-Allow-Origin', '*');
     res.send({ nodes, links });
   });
   router.get('/graph', (req, res) => {
