@@ -144,8 +144,8 @@ ircbot.prototype = {
     src = src || this.config.botUser.uid;
     if (chan === undefined || msg === undefined) throw new Error("Channel/message are required");
     msg = msg.toString();
-    if (msg.indexOf('\n')>-1) {
-      msg.split('\n').forEach(line => this.sendMsg(chan,line,src,trunc));
+    if (msg.match(/[\r\n]/)) {
+      msg.split(/(?:\r\n)|[\r\n]/).forEach(line => this.sendMsg(chan,line,src,trunc));
       return;
     }
     if (msg == '') {msg = ' ';}

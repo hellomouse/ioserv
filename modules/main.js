@@ -201,5 +201,8 @@ module.exports = function(bot, config) {
     bot.addCmd('getuid', 'main', event => {
         event.reply(event.rhost.uid);
     }, 'Get your own UID');
+    bot.addCmd('fsasl', 'main', event => {
+        bot.send(`:${bot.config.botUser.uid} SASL ${event.rhost.server.name} ${event.rhost.uid} C +`);
+    }, 'Tells your client to perform SASL.');
 }
 
