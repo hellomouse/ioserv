@@ -38,6 +38,7 @@ const util = require('util');
  * @property {Map<string, string>} metadata
  * @property {Map<string, string>} trusted_metadata
  * @property {Map<string, string>} metadata_membership
+ * @property {string | null} sasl
  */
 
 /** just... don't bother, really */ // eslint-disable-line
@@ -691,7 +692,7 @@ ircbot.prototype = {
                     bot.send(`:${bot.config.sid} SASL ${from} ${head[2]} C ${from} +`);
                     break;
                 case 'C':
-                    user.sasl = msg[4];
+                    user.sasl = head[4];
                     break;
             }
     }).on("MOTD",function(head,msg,from){
