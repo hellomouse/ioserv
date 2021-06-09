@@ -286,6 +286,8 @@ ircbot.prototype = {
     });
     server.parent = this.client.ownServer;
     this.client.ownServer.children.add(server);
+    this.send(`:${this.client.sid} SID ${name} 2 ${sid} :${description}`);
+    this.send(`:${sid} EOS`);
     return server;
   },
   getChannel(name) {
