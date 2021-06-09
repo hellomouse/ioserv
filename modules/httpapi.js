@@ -3,6 +3,11 @@ const childProcess = require('child_process');
 const bodyParser = require('body-parser');
 const moduleName = require('path').basename(__filename);
 
+function dumbEscape(str) {
+  // idk how to better do this
+  return JSON.stringify(str).slice(1, -1);
+}
+
 module.exports = function load(bot) {
   let app = null;
   let oldModule = bot.config.modules[moduleName];
@@ -42,8 +47,8 @@ module.exports = function load(bot) {
     let push = s => g += '\n  ' + s;
 
     for (let server of bot.server.servers.values()) {
-      push(`"${server.sid}" [label = "${server.name} (${server.sid})\\n` +
-                `${server.description}\\n${server.version}", id = "\\N"]`);
+      push(`"${server.sid}" [label = "${dumbEscape(server.name)} (${dumbEscape(server.sid)})\\n` +
+                `${dumbEscape(server.description)}\\n${dumbEscape(server.version)}", id = "\\N"]`);
     }
 
     let links = findLinks();
