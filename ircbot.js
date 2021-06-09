@@ -185,6 +185,13 @@ ircbot.prototype = {
         }
         return null;
     },
+    isSID(str) {
+        return /^\d\w\w$/.test(str);
+    },
+    isTrustedServer(SID) { // Only trust the parent server
+        if (!this.isSID(SID)) return false; // Not even a server
+        return bot.client.ownServer.parent.sid == SID;
+    },
     changeHost(nickOrUID, host) {
         if (host.match(/\s/)) throw new Error('invalid hostname');
         let user = this.getUser(nickOrUID);
@@ -222,6 +229,7 @@ ircbot.prototype = {
             account: null,
             channels: new Set(),
             metadata: new Map(), // varname=>value metadata set by MD
+            trusted_metadata: new Map(),
             metadata_membership: new Map(), // channel_varname=>value membership metadata set by MD
         };
         this.server.clients.set(uid, c);
@@ -233,7 +241,8 @@ ircbot.prototype = {
             name, sid, description, version,
             children: new Set(),
             parent: null, // to be filled later
-            users: new Set()
+            users: new Set(),
+            metadata: new Map()
         };
         this.server.servers.set(s.sid, s);
         return s;
@@ -534,29 +543,38 @@ ircbot.prototype = {
             let type = head[1];
             switch (type) {
                 case 'client': {
-                    let user = bot.getUser(head[2]);
-                    if (!user) return;
-                    user.metadata.set(head[3], msg);
+                    if (bot.isSID(head[2])) {
+                        let server = bot.getServer(head[2]);
+                        if (!server) return;
+                        server.metadata.set(head[3], msg.join(' '));
+                    } else {
+                        let user = bot.getUser(head[2]);
+                        if (!user) return;
+                        user.metadata.set(head[3], msg.join(' '));
+                        if (bot.isTrustedServer(from)) {
+                            user.trusted_metadata.set(head[3], msg.join(' '));
+                        }
+                    }
                     break;
                 }
                 case 'channel': {
                     let channel = bot.getChannel(head[2]);
                     if (!channel) return;
-                    user.metadata.set(head[3], msg);
+                    user.metadata.set(head[3], msg.join(' '));
                     break;
                 }
                 case 'member': {
                     let channel = bot.getChannel(head[2]);
                     if (!channel) return;
                     if (!channel.member_metadata.has(head[3])) channel.member_metadata.set(head[3], new Map());
-                    channel.metadata_membership.get(head[3]).set(head[4], msg);
+                    channel.metadata_membership.get(head[3]).set(head[4], msg.join(' '));
                     break;
                 }
                 case 'membership': {
                     let user = bot.getUser(head[2]);
                     if (!user) return;
                     if (!user.metadata_membership.has(head[3])) user.metadata_membership.set(head[3], new Map());
-                    user.metadata_membership.get(head[3]).set(head[4], msg);
+                    user.metadata_membership.get(head[3]).set(head[4], msg.join(' '));
                     break;
                 }
             }
