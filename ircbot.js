@@ -190,7 +190,7 @@ ircbot.prototype = {
     },
     isTrustedServer(SID) { // Only trust the parent server
         if (!this.isSID(SID)) return false; // Not even a server
-        return bot.client.ownServer.parent.sid == SID;
+        return this.client.ownServer.parent.sid == SID;
     },
     changeHost(nickOrUID, host) {
         if (host.match(/\s/)) throw new Error('invalid hostname');
