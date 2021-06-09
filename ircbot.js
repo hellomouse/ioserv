@@ -693,6 +693,7 @@ ircbot.prototype = {
                     break;
                 case 'C':
                     user.sasl = head[4];
+                    bot.send(`:${bot.config.sid} SASL ${from} ${head[2]} D S`);
                     break;
             }
     }).on("MOTD",function(head,msg,from){
