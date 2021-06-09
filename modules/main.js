@@ -8,8 +8,7 @@ module.exports = function(bot, config) {
                 event.reply('No such user');
                 return;
             }
-            // REFACTOR_FIX
-            if (user.server !== bot.config.sname) {
+            if (user.server !== bot.client.ownServer) {
                 event.reply('User not on IoServ');
                 return;
             }
