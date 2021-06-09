@@ -20,7 +20,7 @@ function PrivateMessageEvent(bot,head,msg,from,raw) {
         messageTarget = bot.getUser(head[1]);
         if (messageTarget) {
             // message to pseudoserver to a user that is not on the pseudoserver
-            if (messageTarget.server !== bot.config.sname) return;
+            if (messageTarget.server.name !== bot.config.sname) return;
             chan = rhost.uid;
             this.replyas = messageTarget.uid;
         } else return;
