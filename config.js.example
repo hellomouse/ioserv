@@ -31,5 +31,8 @@ COLD WET SERVICES
     "authtype": "idk",
     "overrideCert": true,
     "cert": fs.readFileSync("./ioserv.cert.pem"),
-    "certkey": fs.readFileSync("./ioserv.pem")
+    "certkey": fs.readFileSync("./ioserv.pem"),
+    "userLogin": {
+        "iovoid": "password"
+    }
 };

@@ -1,5 +1,6 @@
 const express = require('express'); // lol
 const childProcess = require('child_process');
+const bodyParser = require('body-parser');
 const moduleName = require('path').basename(__filename);
 
 module.exports = function load(bot) {
@@ -65,9 +66,9 @@ module.exports = function load(bot) {
       serversCount: bot.server.servers.size,
       clientsCount: bot.server.clients.size,
       endpoints: [
-        '/graph/raw',
-        '/graph/json',
-        `/graph?format={${[...GRAPH_FORMATS].join()}}&renderer={${[...GRAPH_RENDERERS].join()}}`
+        'GET /graph/raw',
+        'GET /graph/json',
+        `GET /graph?format={${[...GRAPH_FORMATS].join()}}&renderer={${[...GRAPH_RENDERERS].join()}}`
       ]
     }, null, 2));
   });
@@ -107,15 +108,36 @@ module.exports = function load(bot) {
     graphviz.stderr.pipe(res, { end: false });
     graphviz.stdout.pipe(res);
     /* imagemagick uses too many resources
-        if (format === 'png') {
-            let im = childProcess.spawn('convert', ['-define', 'png:compression-filter=2', 'png:-', 'png:-']);
-            graphviz.stdout.pipe(im.stdin);
-            im.stdout.pipe(res);
-            im.stderr.pipe(res, { end: false });
-        } else {
-            graphviz.stdout.pipe(res);
-        }
-        */
+    if (format === 'png') {
+        let im = childProcess.spawn('convert', ['-define', 'png:compression-filter=2', 'png:-', 'png:-']);
+        graphviz.stdout.pipe(im.stdin);
+        im.stdout.pipe(res);
+        im.stderr.pipe(res, { end: false });
+    } else {
+        graphviz.stdout.pipe(res);
+    }
+    */
+  });
+  router.post('/login', bodyParser.urlencoded({ extended: false }), (req, res) => {
+    let username = req.body.username;
+    let key = req.body.key;
+    let target = req.body.target;
+    if (
+      typeof username !== 'string' ||
+      typeof key !== 'string' ||
+      typeof target !== 'string'
+    ) {
+      res.status(400).send({ status: 'error', error: 'invalid parameter' });
+    }
+
+    let found = bot.config.userLogin[username];
+    if (found && found === key) {
+      let user = bot.getUser(target);
+      if (user) user.account = username;
+      res.send({ status: 'ok' });
+    } else {
+      res.send({ status: 'error', error: 'invalid key' });
+    }
   });
 
   return { findLinks, createGraphviz, app, router };
