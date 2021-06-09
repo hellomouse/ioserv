@@ -599,7 +599,7 @@ ircbot.prototype = {
         version: 'unknown'
       });
       newServer.parent = fromServer;
-      fromServer.children.add(newServer.sid);
+      fromServer.children.add(newServer);
     }).on('SQUIT', (head, msg, from) => {
       // FIXME: users need to be associated to servers and removed by SQUIT
       // FIXME: servers behind the target of SQUIT need to be removed
