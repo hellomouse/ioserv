@@ -73,7 +73,8 @@ function ircbot(config) {
     ownServer,
     get sid() {
       return bot.client.ownServer.sid;
-    }
+    },
+    botUser: config.botUser
   };
   this.client.ownServer = ownServer;
   this.config = config;
@@ -141,22 +142,27 @@ ircbot.prototype = {
     this.send(`:${src} PRIVMSG ${chan} :${msg}`);
   },
   sendMsg(chan,msg,src,trunc) {
-    src = src || this.config.botUser.uid;
+    src = src || this.client.botUser.uid;
+    let srcUser = this.getUser(src);
+    // seems like sane fallback but idk
+    if (!srcUser) srcUser = bot.getUser(this.client.botUser.uid);
     if (chan === undefined || msg === undefined) throw new Error("Channel/message are required");
     msg = msg.toString();
     if (msg.match(/[\r\n]/)) {
       msg.split(/(?:\r\n)|[\r\n]/).forEach(line => this.sendMsg(chan,line,src,trunc));
       return;
     }
-    if (msg == '') {msg = ' ';}
+    if (msg == '') msg = ' ';
     // TODO: actually calculate length properly
-    var maxlen = 449 - chan.length;
+    // 512 byte max length, 14 bytes for ":!@ PRIVMSG  :"
+    let maxlen = 512 - 14 - srcUser.nick.length - srcUser.ident.length - srcUser.host.length - chan.length;
     if (msg.length > maxlen) {
       if (trunc) {
         this._sendMsg(chan,src,msg.slice(0,maxlen-21)+' \x02(message truncated)');
       } else {
-        var chunk=msg.match(/.{1,430}/g);
-        for (var i in chunk) this._sendMsg(chan,src,chunk[i]);
+        for (let i = 0; i <= msg.length; i += maxlen) {
+          this._sendMsg(chan, src, msg.slice(i, i + maxlen));
+        }
       }
     } else {
       this._sendMsg(chan,src,msg);
@@ -174,7 +180,7 @@ ircbot.prototype = {
     let user = this.getUser(nick);
     let channel = this.getChannel(chan);
     if (!user || !channel) return;
-    src = src || this.config.botUser.uid;
+    src = src || this.client.botUser.uid;
     this.send(`:${src} KICK ${channel.name} ${user.uid} :${reason}`);
     this._handleChannelPart(channel, user);
   },
@@ -199,7 +205,7 @@ ircbot.prototype = {
     if (user.server === this.client.ownServer) return false;
     if (!user) return false;
     if (!reason || !reason.length) reason = 'Killed';
-    src = src || this.config.botUser.uid;
+    src = src || this.client.botUser.uid;
     this.send(`:${src} KILL ${user.uid} :${reason}`);
     this._handleRemoveClient(user);
     return true;
@@ -581,7 +587,7 @@ ircbot.prototype = {
       server.version = msg.join(' ') || head[6];
     }).on('EOS', (head, msg, from) => {
       if (from !== bot.server.remoteServer.sid) return;
-      bot.config.botUser.uid = bot.addUser(bot.config.botUser);
+      bot.client.botUser = bot.getUser(bot.addUser(bot.config.botUser));
       bot.send(`:${bot.client.sid} EOS`);
       bot.events.emit('regdone');
     }).on('PRIVMSG', function(head,msg,from,raw) {
@@ -758,7 +764,7 @@ ircbot.prototype = {
         let channels = [...user.channels];
         queueMicrotask(() => {
           let newuid = bot.addUser(user);
-          if (user.uid === bot.config.botUser.uid) bot.config.botUser.uid = newuid;
+          if (user.uid === bot.client.botUser.uid) bot.client.botUser = bot.getUser(newuid);
           for (let channel of channels) bot.join(newuid, channel);
         });
       }

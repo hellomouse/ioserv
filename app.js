@@ -94,13 +94,13 @@ if (cluster.isMaster) {
     bot.events.on('connclosed', () => setTimeout(() => process.exit(11), 3000));
     bot.events.on('regdone', _=>{
       // handled in config as botUser
-      bot.join(bot.config.botUser.uid,"#services");
-      bot.mode('#services', '+o ' + bot.config.botUser.nick);
-      bot.join(bot.config.botUser.uid, "#hellomouse");
-      bot.join(bot.config.botUser.uid, '#pissnet');
-      bot.mode('#pissnet', '+o ' + bot.config.botUser.nick);
-      bot.join(bot.config.botUser.uid, '#opers');
-      bot.mode('#opers', '+o ' + bot.config.botUser.nick);
+      bot.join(bot.client.botUser.uid,"#services");
+      bot.mode('#services', '+o ' + bot.client.botUser.nick);
+      bot.join(bot.client.botUser.uid, "#hellomouse");
+      bot.join(bot.client.botUser.uid, '#pissnet');
+      bot.mode('#pissnet', '+o ' + bot.client.botUser.nick);
+      bot.join(bot.client.botUser.uid, '#opers');
+      bot.mode('#opers', '+o ' + bot.client.botUser.nick);
       let lolserv = bot.addUser({ nick: "LolServ", ident: "LolServ", host: "ioserv.hellomouse.net", modes: "Szi", realname: "Laughing Services" });
       bot.join(lolserv,"#services",true);
       let undefinedserv = bot.addUser({ nick: 'undefined', ident: 'undefined', host: 'undefined', modes: 'zi', realname: 'undefined' }); // YAY
