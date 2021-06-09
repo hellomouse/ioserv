@@ -242,8 +242,13 @@ ircbot.prototype = {
     }
     return null;
   },
+  /**
+   * Test if string is valid SID
+   * @param {string} str
+   * @return {boolean}
+   */
   isSID(str) {
-    return /^\d\w\w$/.test(str);
+    return Boolean(/^\d[\dA-Z]{2}$/.test(str));
   },
   isTrustedServer(serv) { // Only trust the parent server
     let server = this.getServer(serv);
@@ -267,6 +272,18 @@ ircbot.prototype = {
     if (!server) return;
     this.send(`SQUIT ${server.name} :${reason}`);
     this._handleRemoveServer(server);
+  },
+  introduceServer(sid, name, description = 'IoServ') {
+    if (!this.isSID(sid)) throw new Error('invalid SID');
+    if (this.server.servers.has(sid)) throw new Error('sid already exists');
+    if (this.getServer(name)) throw new Error('server name already exists');
+    let server = this._makeServer({
+      sid, name, description,
+      version: 'IoServ'
+    });
+    server.parent = this.client.ownServer;
+    this.client.ownServer.children.add(server);
+    return server;
   },
   getChannel(name) {
     return this.server.channels.get(name.toLowerCase()) || null;
