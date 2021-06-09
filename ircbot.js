@@ -632,7 +632,7 @@ ircbot.prototype = {
       }
       if (client.vhost === '*') client.vhost = null;
       if (client.chost === '*') client.chost = null;
-      bot.events.emit('newUser', client);
+      bot.events.emit('newClient', client);
     }).on('SID', function(head,msg,from) {
       let fromServer = bot.server.servers.get(from);
       if (!fromServer) return;
@@ -644,6 +644,7 @@ ircbot.prototype = {
       });
       newServer.parent = fromServer;
       fromServer.children.add(newServer);
+      bot.events.emit('newServer', newServer);
     }).on('SQUIT', (head, msg, from) => {
       let target = bot.getServer(head[1]);
       bot._handleRemoveServer(target);
