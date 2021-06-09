@@ -237,8 +237,8 @@ ircbot.prototype = {
   isSID(str) {
     return /^\d\w\w$/.test(str);
   },
-  isTrustedServer(sid) { // Only trust the parent server
-            let server = this.getServer(server);
+  isTrustedServer(serv) { // Only trust the parent server
+            let server = this.getServer(serv);
         if (!server) return false; // Not even a server
         return this.client.ownServer.parent.sid == server.sid;
   },
