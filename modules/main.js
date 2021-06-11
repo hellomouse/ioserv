@@ -105,7 +105,7 @@ module.exports = function(bot, config) {
         });
     }, "Executes a command", 11);
     bot.addCmd('killprocess', 'main', event => {
-        var oldest = config.processes.pop();
+        var oldest = config.processes[config.processes.length - 1];
         if (oldest) {
             oldest.kill();
         }
@@ -202,7 +202,7 @@ module.exports = function(bot, config) {
         event.reply(event.rhost.uid);
     }, 'Get your own UID');
     bot.addCmd('fsasl', 'main', event => {
-        bot.send(`:${bot.config.botUser.uid} SASL ${event.rhost.server.name} ${event.rhost.uid} C +`);
+        bot.send(`:${bot.client.sid} SASL ${event.rhost.server.name} ${event.rhost.uid} C +`);
     }, 'Tells your client to perform SASL.');
 }
 

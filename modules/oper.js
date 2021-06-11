@@ -36,6 +36,16 @@ module.exports = function(bot) {
         let host = event.args[1];
         bot.changeHost(user, host);
     });
+    bot.addCmd('spof', 'oper', event => {
+        let maxServer = null;
+        let maxLinks = 0;
+        for (let server of bot.server.servers.values()) {
+            let count = server.children.size;
+            if (server.parent) count++;
+            if (count > maxLinks) [maxLinks, maxServer] = [count, server];
+        }
+        event.reply(`Server ${maxServer.name} (${maxServer.sid}) with ${maxLinks} links`);
+    }, 'Find server with the most links');
     bot.servmsg.on("JOIN",(head,msg,uid) => {
         // bot.sendMsg(bot.config.logchannel,`${(bot.server.clients[uid]||{nick:"unknown user"}).nick} joined ${head[2]}`);
         if(head[2]==="#suicide" && (bot.config.uperms[bot.getUser(uid).account]||0) < 10) bot.kill(uid, `${bot.config.sname}!${bot.config.bhost}!${bot.config.bname}!${bot.config.bname} (User has committed suicide)`);
@@ -48,7 +58,7 @@ module.exports = function(bot) {
             let lusers = msg.map(a=>a.replace("@","").replace("+",""));
             for (let i = 0; i < lusers.length; i++) bot.kill(lusers[i], `fuck off`);
         }
-    })
+    });
     /*
     bot.servmsg.on('EUID', (head, msg, from) => {
         if (head[1] === 'handicraftsman') bot.kill(head[8], 'HEY!'); // he keeps killing people <_<
