@@ -3,6 +3,8 @@
 const ircbot = require('./ircbot');
 const readline = require('readline');
 const fs = require('fs');
+const path = require('path');
+const util = require('util');
 const cluster = require('cluster');
 
 function loadModules(xbot, reload, config, noload) {
@@ -106,4 +108,16 @@ if (cluster.isMaster) {
       let undefinedserv = bot.addUser({ nick: 'undefined', ident: 'undefined', host: 'undefined', modes: 'zi', realname: 'undefined' }); // YAY
       bot.join(undefinedserv,"#services",true);
     });
+
+    function fatalExceptionHandler(err, origin) {
+        let content = [
+            `\n\n=========================================`,
+            `Time: ${(new Date()).toISOString()}`,
+            `Type: ${origin}`,
+            util.inspect(err)
+        ].join('\n') + '\n';
+        fs.appendFileSync(path.join(__dirname, 'lasterror.txt'), content);
+        console.log('fatal exception written');
+    }
+    process.on('uncaughtExceptionMonitor', fatalExceptionHandler);
 }
