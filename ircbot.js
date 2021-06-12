@@ -37,7 +37,6 @@ const util = require('util');
  * @property {Set<string>} channels
  * @property {Map<string, string>} metadata
  * @property {Map<string, string>} metadata_membership
- * @property {string | null} sasl
  */
 
 /** just... don't bother, really */ // eslint-disable-line
@@ -326,16 +325,15 @@ ircbot.prototype = {
    * @param {string} [descriptor.vhost]
    * @param {string} [descriptor.chost]
    * @param {string} [descriptor.ip]
-   * @param {string} [descriptor.sasl]
    * @return {Client}
    */
   _makeClient({
     uid, nick, ident, host, realname, modes, ts, server,
-    vhost = '*', chost = '*', ip = '*', sasl = null
+    vhost = '*', chost = '*', ip = '*'
   }) {
     /** @type {Client} */
     let c = {
-      uid, nick, ident, host, realname, modes, ts, server, vhost, chost, ip, sasl,
+      uid, nick, ident, host, realname, modes, ts, server, vhost, chost, ip,
       account: null,
       channels: new Set(),
       metadata: new Map(), // varname=>value metadata set by MD
@@ -628,11 +626,11 @@ ircbot.prototype = {
         chost: head[10],
         ip: head[11],
         realname: msg.join(' '),
-        server: bot.server.servers.get(sid),
-        sasl: bot.server.preRegistrationSASL.get(head[6]) || null
+        server: bot.server.servers.get(sid)
       });
-      if (client.sasl) {
-        const [authz, authn, passwd] = Buffer.from(client.sasl, "base64").toString().split('\0');
+      let sasl = bot.server.preRegistrationSASL.get(client.uid);
+      if (sasl) {
+        const [authz, authn, passwd] = Buffer.from(sasl, "base64").toString().split('\0');
         if (bot.config.userLogin[authz] && bot.config.userLogin[authz] === passwd) client.account = authz;
         bot.server.preRegistrationSASL.delete(head[6]);
       }
@@ -733,8 +731,7 @@ ircbot.prototype = {
           break;
         case 'C':
           if (user) {
-            user.sasl = head[4];
-            const [authz, authn, passwd] = Buffer.from(user.sasl, "base64").toString().split('\0');
+            const [authz, authn, passwd] = Buffer.from(head[4], "base64").toString().split('\0');
             if (bot.config.userLogin[authz] && bot.config.userLogin[authz] === passwd) user.account = authz;
           } else {
             bot.server.preRegistrationSASL.set(head[2], head[4]);
