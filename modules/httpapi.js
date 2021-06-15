@@ -112,6 +112,9 @@ module.exports = function load(bot) {
     graphviz.stdin.end();
     graphviz.stderr.pipe(res, { end: false });
     graphviz.stdout.pipe(res);
+    let killTimeout = setTimeout(() => graphviz.kill(), 60 * 1000);
+    graphviz.on('exit', () => clearTimeout(killTimeout));
+    res.on('close', () => graphviz.kill());
     /* imagemagick uses too many resources
     if (format === 'png') {
         let im = childProcess.spawn('convert', ['-define', 'png:compression-filter=2', 'png:-', 'png:-']);
