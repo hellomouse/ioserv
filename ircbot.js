@@ -58,6 +58,7 @@ function ircbot(config) {
     /** @type {Server | null} */
     remoteServer: null,
     preRegistrationSASL: new Map(),
+    tkl: new Map(),
   };
   let ownServer = this._makeServer({
     name: config.sname,
@@ -118,6 +119,9 @@ function ircbot(config) {
     console.log('[WARN] Connection closed.');
     bot.events.emit('connclosed');
   });
+
+  // start expired cleanup timer
+  this._cleanupExpired();
 }
 ircbot.prototype = {
   Command: require('./command'),
@@ -171,9 +175,6 @@ ircbot.prototype = {
   mode(chan,mode,src) {
     src = src || this.client.sid;
     this.send(`:${src} MODE ${chan} ${mode}`);
-  },
-  skick(chan,nick,reason) {
-    this.send(':'+this.client.sid+' KICK '+chan+' '+nick+' :'+reason);
   },
   kick(chan,nick,reason,src) {
     let user = this.getUser(nick);
@@ -487,6 +488,16 @@ ircbot.prototype = {
     this.init();
     return this;
   },
+  _cleanupExpired() {
+    let now = this.getTS();
+    for (let [key, value] of this.server.preRegistrationSASL) {
+      if (value.expires <= now) this.server.preRegistrationSASL.delete(key);
+    }
+    for (let [key, value] of this.server.tkl) {
+      if (value.expireTS !== 0 && value.expireTS <= now) this.server.tkl.delete(key);
+    }
+    setTimeout(() => this._cleanupExpired(), 5 * 60 * 1000);
+  },
   init() {
     let bot = this;
     this.addCmd('echo','general',function(event) {event.reply(event.args.join(' '));},"Echoes something");
@@ -630,7 +641,7 @@ ircbot.prototype = {
       });
       let sasl = bot.server.preRegistrationSASL.get(client.uid);
       if (sasl) {
-        const [authz, authn, passwd] = Buffer.from(sasl, "base64").toString().split('\0');
+        const [authz, authn, passwd] = Buffer.from(sasl.key, "base64").toString().split('\0');
         if (bot.config.userLogin[authz] && bot.config.userLogin[authz] === passwd) client.account = authz;
         bot.server.preRegistrationSASL.delete(head[6]);
       }
@@ -734,7 +745,10 @@ ircbot.prototype = {
             const [authz, authn, passwd] = Buffer.from(head[4], "base64").toString().split('\0');
             if (bot.config.userLogin[authz] && bot.config.userLogin[authz] === passwd) user.account = authz;
           } else {
-            bot.server.preRegistrationSASL.set(head[2], head[4]);
+            bot.server.preRegistrationSASL.set(head[2], {
+              key: head[4],
+              expires: bot.getTS() + 60 * 5
+            });
           }
           bot.send(`:${bot.client.sid} SASL ${from} ${head[2]} D S`);
           break;
@@ -770,6 +784,22 @@ ircbot.prototype = {
         });
       }
       bot._handleRemoveClient(user);
+    }).on('TKL', (head, msg, from) => {
+      let action = head[1]; // either + or -
+      let type = head[2];
+      let spamfilterType = head[3];
+      let target = head[4];
+      let sourceServer = head[5];
+      let setTS = +head[7];
+      let expireTS = +head[6];
+      let reason = msg.join(' ');
+      if (action === '+') {
+        bot.server.tkl.set(`${type}/${target}`, {
+          type, spamfilterType, target, sourceServer, setTS, expireTS, reason
+        });
+      } else if (action === '-') {
+        bot.server.tkl.delete(`${type}/${target}`);
+      }
     });
   }
 };
