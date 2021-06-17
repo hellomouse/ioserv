@@ -74,7 +74,8 @@ function ircbot(config) {
     get sid() {
       return bot.client.ownServer.sid;
     },
-    botUser: config.botUser
+    botUser: config.botUser,
+    registered: false
   };
   this.client.ownServer = ownServer;
   this.config = config;
@@ -145,6 +146,7 @@ ircbot.prototype = {
     this.send(`:${src} PRIVMSG ${chan} :${msg}`);
   },
   sendMsg(chan,msg,src,trunc) {
+    if (!this.client.registered) return;
     src = src || this.client.botUser.uid;
     let srcUser = this.getUser(src);
     // seems like sane fallback but idk
@@ -598,6 +600,7 @@ ircbot.prototype = {
       if (from !== bot.server.remoteServer.sid) return;
       bot.client.botUser = bot.getUser(bot.addUser(bot.config.botUser));
       bot.send(`:${bot.client.sid} EOS`);
+      bot.client.registered = true;
       bot.events.emit('regdone');
     }).on('PRIVMSG', function(head,msg,from,raw) {
       var event = new bot.PrivateMessageEvent(bot,head,msg,from,raw);
@@ -791,13 +794,13 @@ ircbot.prototype = {
       let type = head[2];
       let spamfilterType = head[3];
       let target = head[4];
-      let sourceServer = head[5];
+      let source = head[5];
       let setTS = +head[7];
       let expireTS = +head[6];
       let reason = msg.join(' ');
       if (action === '+') {
         bot.server.tkl.set(`${type}/${target}`, {
-          type, spamfilterType, target, sourceServer, setTS, expireTS, reason
+          type, spamfilterType, target, source, setTS, expireTS, reason
         });
       } else if (action === '-') {
         bot.server.tkl.delete(`${type}/${target}`);
