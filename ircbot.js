@@ -687,8 +687,10 @@ ircbot.prototype = {
       else channel.ts = Math.min(channel.ts, ts);
 
       for (let user of usersList) {
+        let userObj = bot.getUser(user);
+        if (!userObj) continue;
         channel.users.set(user, '');
-        bot.getUser(user).channels.add(channel.name);
+        userObj.channels.add(channel.name);
       }
     }).on('PART', (head, msg, from) => {
       let user = bot.getUser(from);
