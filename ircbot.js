@@ -497,7 +497,7 @@ ircbot.prototype = {
     let tkl = this.server.tkl.get(key);
     if (!tkl) return false;
     this.server.tkl.delete(key);
-    this.send(`:${this.client.ownServer.name} TKL - ${tkl.type} ${tkl.ident} ${tkl.host} ${tkl.source} ${tkl.expireTS} ${tkl.setTS} :${tkl.reason}`);
+    this.send(`:${this.client.ownServer.name} TKL - ${tkl.type} ${tkl.ident} ${tkl.host} ${source} ${tkl.expireTS} ${tkl.setTS} :${tkl.reason}`);
     return true;
   },
   _start() {
