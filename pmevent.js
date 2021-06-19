@@ -16,6 +16,7 @@ function PrivateMessageEvent(bot,head,msg,from,raw) {
     var host = [rhost.nick,rhost.ident,rhost.host];
     let chan = null; // TODO: REFACTOR
     let messageTarget = bot.getChannel(head[1]);
+    let targetType = 'channel';
     if (messageTarget) chan = messageTarget.name;
     else {
         messageTarget = bot.getUser(head[1]);
@@ -24,6 +25,7 @@ function PrivateMessageEvent(bot,head,msg,from,raw) {
             if (messageTarget.server !== bot.client.ownServer) return;
             chan = rhost.uid;
             this.replyas = messageTarget.uid;
+            targetType = 'user';
         } else return;
     }
     var type = 'msg';
@@ -50,6 +52,8 @@ function PrivateMessageEvent(bot,head,msg,from,raw) {
     this.uperms = uperms;
     this.cmd = cmd;
     this.type = type;
+    this.target = messageTarget;
+    this.targetType = targetType;
     this.bot = bot;
     this.valid = true;
 }

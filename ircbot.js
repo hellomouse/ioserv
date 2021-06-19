@@ -4,6 +4,7 @@
 const EventEmitter = require('events');
 const tls = require('tls');
 const util = require('util');
+const ipaddr = require('ipaddr.js');
 // function to create new EventEmitter with unlimited max listeners
 // function newEvent() {return new EventEmitter().setMaxListeners(0);}
 
@@ -32,7 +33,7 @@ const util = require('util');
  * @property {Server} server
  * @property {string | null} vhost
  * @property {string | null} chost
- * @property {string | null} ip
+ * @property {ipaddr.IPv4 | ipaddr.IPv6 | null} ip
  * @property {string | null} account
  * @property {Set<string>} channels
  * @property {Map<string, string>} metadata
@@ -327,12 +328,12 @@ ircbot.prototype = {
    * @param {Server} descriptor.server
    * @param {string} [descriptor.vhost]
    * @param {string} [descriptor.chost]
-   * @param {string} [descriptor.ip]
+   * @param {ipaddr.IPv4 | ipaddr.IPv6} [descriptor.ip]
    * @return {Client}
    */
   _makeClient({
     uid, nick, ident, host, realname, modes, ts, server,
-    vhost = '*', chost = '*', ip = '*'
+    vhost = '*', chost = '*', ip = null
   }) {
     /** @type {Client} */
     let c = {
@@ -629,6 +630,12 @@ ircbot.prototype = {
       }
     }).on('UID',function(head,msg,from,raw) {
       let sid = head[6].slice(0, 3);
+      let ipEncoded = head[11];
+      let ip = null;
+      if (ipEncoded !== '*') {
+        let buf = Buffer.from(ipEncoded, 'base64');
+        ip = ipaddr.fromByteArray(buf);
+      }
       let client = bot._makeClient({
         nick: head[1],
         ts: head[3],
@@ -638,7 +645,7 @@ ircbot.prototype = {
         modes: head[8],
         vhost: head[9],
         chost: head[10],
-        ip: head[11],
+        ip,
         realname: msg.join(' '),
         server: bot.server.servers.get(sid)
       });
