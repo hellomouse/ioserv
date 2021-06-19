@@ -483,6 +483,23 @@ ircbot.prototype = {
     this.send(`:${user.uid} PART ${chan} :${reason}`);
     this._handleChannelPart(channel, user); 
   },
+  addTKL(type, ident, host, source = this.client.ownServer.name, expireTS = 0, reason = '') {
+    let setTS = this.getTS();
+    let key = `${type}/${ident}@${host}`;
+    if (this.server.tkl.has(key)) return false;
+    let tkl = { type, ident, host, source, setTS, expireTS, reason };
+    this.server.tkl.set(key, tkl);
+    this.send(`:${this.client.ownServer.name} TKL + ${tkl.type} ${tkl.ident} ${tkl.host} ${tkl.source} ${tkl.setTS} ${tkl.expireTS} :${tkl.reason}`);
+    return true;
+  },
+  removeTKL(type, ident, host) {
+    let key = `${type}/${ident}@${host}`;
+    let tkl = this.server.tkl.get(key);
+    if (!tkl) return false;
+    this.server.tkl.delete(key);
+    this.send(`:${this.client.ownServer.name} TKL - ${tkl.type} ${tkl.ident} ${tkl.host} ${tkl.source} ${tkl.setTS} ${tkl.expireTS} :${tkl.reason}`);
+    return true;
+  },
   _start() {
     if(this.config.authtype != 'certfp') {this.ircsock.connect({host: this.config.host, port: this.config.port});}
   },
@@ -799,18 +816,18 @@ ircbot.prototype = {
     }).on('TKL', (head, msg, from) => {
       let action = head[1]; // either + or -
       let type = head[2];
-      let spamfilterType = head[3];
-      let target = head[4];
+      let ident = head[3];
+      let host = head[4];
       let source = head[5];
       let setTS = +head[7];
       let expireTS = +head[6];
       let reason = msg.join(' ');
       if (action === '+') {
-        bot.server.tkl.set(`${type}/${target}`, {
-          type, spamfilterType, target, source, setTS, expireTS, reason
+        bot.server.tkl.set(`${type}/${ident}@${host}`, {
+          type, ident, host, source, setTS, expireTS, reason
         });
       } else if (action === '-') {
-        bot.server.tkl.delete(`${type}/${target}`);
+        bot.server.tkl.delete(`${type}/${ident}@${host}`);
       }
     });
   }

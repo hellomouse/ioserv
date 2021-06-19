@@ -1,3 +1,4 @@
+const ipaddr = require('ipaddr.js');
 let activeJupeTargets = new Map([
   /*
   ['random.testing.server.please.ignore', {
@@ -17,6 +18,24 @@ module.exports = function load(bot) {
   // pls do not chaos
   bot.events.on('newClient', client => {
     if (client.nick === 'CHAOS') bot.kill(client, 'CHAOS is no longer allowed');
+  });
+  bot.servmsg.on('SENDSNO', (head, msg, from) => {
+    if (head[1] !== 'f') return;
+    if (msg[2] !== '(max-concurrent-conversations)') return;
+    let source = bot.getServer(from);
+    let rawTarget = msg[5].slice(1, -1);
+    let parsedIP = ipaddr.parse(rawTarget);
+    let target;
+    if (parsedIP.kind() === 'ipv6') {
+      // lazy way of obtaining /64
+      for (let i = 4; i < 8; i++) parsedIP.parts[i] = 0;
+      target = parsedIP.toString() + '/64';
+    } else {
+      target = parsedIP.toString();
+    }
+    bot.sendMsg('#services', `[autogline/pmflood] found [${msg[4]}] (addr [${rawTarget}], gline [${target}]) from [${source.name}] (max-concurrent-conversations)`);
+    let expireTS = bot.getTS() + 86400; // 1 day
+    bot.addTKL('G', '*', target, 'ioserv.freenode.ceo', expireTS, `[autogline/pmflood] max-concurrent-conversations from ${source.name}`);
   });
 
   if (activeJupeTargets.size) {
