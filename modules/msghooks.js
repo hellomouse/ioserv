@@ -20,6 +20,7 @@ module.exports = function load(bot) {
     if (client.nick === 'CHAOS') bot.kill(client, 'CHAOS is no longer allowed');
   });
   bot.servmsg.on('SENDSNO', (head, msg, from) => {
+    // autogline/pmflood listening for max-concurrent-conversations
     if (head[1] !== 'f') return;
     if (msg[2] !== '(max-concurrent-conversations)') return;
     let source = bot.getServer(from);
@@ -38,50 +39,65 @@ module.exports = function load(bot) {
     bot.addTKL('G', '*', target, 'IoServ[autogline/pmflood]', expireTS, `max-concurrent-conversations from ${source.name} (${rawTarget})`);
   });
 
-  if (activeJupeTargets.size) {
-    bot.events.on('newServer', server => {
-      let jupeTarget = activeJupeTargets.get(server.name.toLowerCase());
-      if (!jupeTarget) return;
-      jupeTarget.sid = server.sid;
+  bot.events.on('newServer', server => {
+    if (server.name.toLowerCase() === 'eris.berkeley.edu') {
+      // activejupe whatever server introduces eris
+      let parent = server.parent;
+      bot.sendMsg('#services', `[activejupe/eris] server [${parent.name} (${parent.sid})] introduced [${server.name}], adding activejupe`);
+      activeJupeTargets.set(parent.name, {
+        sid: parent.sid,
+        quitParent: false,
+        reason: 'please remove eris'
+      });
+      bot.squit(parent, '[activejupe] removing eris');
+    }
+    // activejupe
+    if (!activeJupeTargets.size) return;
+    let jupeTarget = activeJupeTargets.get(server.name.toLowerCase());
+    if (!jupeTarget) return;
+    jupeTarget.sid = server.sid;
 
-      bot.squit(server, 'active jupe in progress');
+    bot.squit(server, 'active jupe in progress');
+    if (jupeTarget.quitParent) {
+      let parent = server.parent;
+      if (parent !== bot.server.remoteServer) {
+        bot.squit(server.parent, `active jupe for ${server.name}, quit parent`);
+      }
+    }
+    bot.introduceServer(jupeTarget.sid, server.name, `active jupe for ${server.name} (${jupeTarget.reason})`);
+    bot.sendMsg('#services', `[activejupe] received SID, squit and introduce ${server.name}`);
+  });
+  bot.servmsg.on('SQUIT', (head, msg, from) => {
+    // activejupe
+    if (!activeJupeTargets.size) return;
+    let target = head[1];
+    let jupeTarget = activeJupeTargets.get(target.toLowerCase());
+    if (!jupeTarget) return;
+    setTimeout(() => {
+      if (bot.getServer(target)) return;
+      bot.introduceServer(jupeTarget.sid, target, `active jupe for ${target} (${jupeTarget.reason})`);
+      bot.sendMsg('#services', `[activejupe] received SQUIT, introduce ${target}`);
+    }, 100);
+  });
+
+  function doInitialCheck() {
+    // activejupe
+    if (!activeJupeTargets) return;
+    for (let [name, jupeTarget] of activeJupeTargets) {
+      let target = bot.getServer(name);
+      if (!target) continue;
+      bot.squit(target, 'active jupe in progress');
       if (jupeTarget.quitParent) {
         let parent = server.parent;
         if (parent !== bot.server.remoteServer) {
-          bot.squit(server.parent, `active jupe for ${server.name}, quit parent`);
+          bot.squit(server.parent, `active jupe for ${target.name}, quit parent`);
         }
       }
-      bot.introduceServer(jupeTarget.sid, server.name, `active jupe for ${server.name} (${jupeTarget.reason})`);
-      bot.sendMsg('#services', `[activejupe] received SID, squit and introduce ${server.name}`);
-    });
-    bot.servmsg.on('SQUIT', (head, msg, from) => {
-      let target = head[1];
-      let jupeTarget = activeJupeTargets.get(target.toLowerCase());
-      if (!jupeTarget) return;
-      setTimeout(() => {
-        if (bot.getServer(target)) return;
-        bot.introduceServer(jupeTarget.sid, target, `active jupe for ${target} (${jupeTarget.reason})`);
-        bot.sendMsg('#services', `[activejupe] received SQUIT, introduce ${target}`);
-      }, 100);
-    });
-
-    function doInitialCheck() {
-      for (let [name, jupeTarget] of activeJupeTargets) {
-        let target = bot.getServer(name);
-        if (!target) continue;
-        bot.squit(target, 'active jupe in progress');
-        if (jupeTarget.quitParent) {
-          let parent = server.parent;
-          if (parent !== bot.server.remoteServer) {
-            bot.squit(server.parent, `active jupe for ${target.name}, quit parent`);
-          }
-        }
-        bot.introduceServer(jupeTarget.sid, server.name, `active jupe for ${target.name} (${jupeTarget.reason})`);
-        bot.sendMsg('#services', `[activejupe] initial check found server, squit and introduce ${target.name}`);
-      }
+      bot.introduceServer(jupeTarget.sid, server.name, `active jupe for ${target.name} (${jupeTarget.reason})`);
+      bot.sendMsg('#services', `[activejupe] initial check found server, squit and introduce ${target.name}`);
     }
-    if (bot.client.registered) doInitialCheck();
-    else bot.events.once('regdone', doInitialCheck);
   }
+  if (bot.client.registered) doInitialCheck();
+  else bot.events.once('regdone', doInitialCheck);
 };
 
