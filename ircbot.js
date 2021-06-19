@@ -2,6 +2,7 @@
 "use strict";
 // throw new Iovoid([]+!![]);
 const EventEmitter = require('events');
+const net = require('net');
 const tls = require('tls');
 const util = require('util');
 const ipaddr = require('ipaddr.js');
@@ -87,14 +88,13 @@ function ircbot(config) {
   this.sendMsgQueue = [];
   this.sendCount = 0;
   // TODO: this is garbage, fix it
-  // @ts-ignore
-  this.ircsock = new tls.TLSSocket(this.ircsock);
-  if (config.authtype === 'certfp') {
-    this.ircsock = tls.connect({
-      host: config.host, port: config.port, cert: config.cert,
-      key: config.certkey, rejectUnauthorized: !config.overrideCert
-    });
-  }
+  // is it necessary to support non-tls connections?
+  this.baseSocket = new net.Socket();
+  let secureContext = tls.createSecureContext({ cert: config.cert, key: config.certkey });
+  this.ircsock = new tls.TLSSocket(this.baseSocket, {
+    secureContext,
+    rejectUnauthorized: config.rejectUnauthorized
+  });
   this.ircsock.on('connect', function() {
     console.log('Connected to server!');
     bot.send(`PASS :${config.password}`);
@@ -501,7 +501,7 @@ ircbot.prototype = {
     return true;
   },
   _start() {
-    if(this.config.authtype != 'certfp') {this.ircsock.connect({host: this.config.host, port: this.config.port});}
+    this.baseSocket.connect({ host: this.config.host, port: this.config.port });
   },
   start() {
     this._start();
