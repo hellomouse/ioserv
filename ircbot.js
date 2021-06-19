@@ -489,15 +489,15 @@ ircbot.prototype = {
     if (this.server.tkl.has(key)) return false;
     let tkl = { type, ident, host, source, setTS, expireTS, reason };
     this.server.tkl.set(key, tkl);
-    this.send(`:${this.client.ownServer.name} TKL + ${tkl.type} ${tkl.ident} ${tkl.host} ${tkl.source} ${tkl.setTS} ${tkl.expireTS} :${tkl.reason}`);
+    this.send(`:${this.client.ownServer.name} TKL + ${tkl.type} ${tkl.ident} ${tkl.host} ${tkl.source} ${tkl.expireTS} ${tkl.setTS} :${tkl.reason}`);
     return true;
   },
-  removeTKL(type, ident, host) {
+  removeTKL(type, ident, host, source = this.client.ownServer.name) {
     let key = `${type}/${ident}@${host}`;
     let tkl = this.server.tkl.get(key);
     if (!tkl) return false;
     this.server.tkl.delete(key);
-    this.send(`:${this.client.ownServer.name} TKL - ${tkl.type} ${tkl.ident} ${tkl.host} ${tkl.source} ${tkl.setTS} ${tkl.expireTS} :${tkl.reason}`);
+    this.send(`:${this.client.ownServer.name} TKL - ${tkl.type} ${tkl.ident} ${tkl.host} ${tkl.source} ${tkl.expireTS} ${tkl.setTS} :${tkl.reason}`);
     return true;
   },
   _start() {

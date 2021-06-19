@@ -35,7 +35,7 @@ module.exports = function load(bot) {
     }
     bot.sendMsg('#services', `[autogline/pmflood] found [${msg[4]}] (addr [${rawTarget}], gline [${target}]) from [${source.name}] (max-concurrent-conversations)`);
     let expireTS = bot.getTS() + 86400; // 1 day
-    bot.addTKL('G', '*', target, 'ioserv.freenode.ceo', expireTS, `[autogline/pmflood] max-concurrent-conversations from ${source.name}`);
+    bot.addTKL('G', '*', target, 'IoServ[autogline/pmflood]', expireTS, `max-concurrent-conversations from ${source.name} (${rawTarget})`);
   });
 
   if (activeJupeTargets.size) {
