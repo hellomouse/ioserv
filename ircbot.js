@@ -178,7 +178,9 @@ ircbot.prototype = {
   },
   mode(chan,mode,src) {
     src = src || this.client.sid;
-    this.send(`:${src} MODE ${chan} ${mode}`);
+    let channel = this.getChannel(chan);
+    if (!channel) return;
+    this.send(`:${src} MODE ${channel.name} ${mode} ${channel.ts}`);
   },
   kick(chan,nick,reason,src) {
     let user = this.getUser(nick);

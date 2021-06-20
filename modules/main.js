@@ -17,11 +17,6 @@ module.exports = function(bot, config) {
             event.reply("Not enough arguments. See help");
         }
     }, "(level 10) Tells the bot to join a channel, for multiple channels, separate with ','", 10);
-    bot.addCmd('getuser', 'main', event => {
-        if (!event.args[0]) return;
-        let user = bot.getUser(event.args[0]);
-        event.reply(util.inspect(user));
-    }, "(level 10) Obtain user information, useful for debugging", 10);
     bot.addCmd('part', 'main', event => {
         if (event.args[0] != undefined) {
             bot.part(event.args[0],event.args[1]);
@@ -199,11 +194,11 @@ module.exports = function(bot, config) {
         bot.send(`:${bot.config.botUser.uid} INVITE ${event.rhost.uid} ${chan} 0`);
     }, '(level 11) Get an invite to a channel', 11);
     bot.addCmd('getuid', 'main', event => {
-        if (!event.args[0]) event.reply(event.rhost.uid);
+        if (!event.args[0]) event.reply(`${event.rhost.nick} is ${event.rhost.uid}`);
         else {
             let user = bot.getUser(event.args[0]);
             if (!user) event.reply('User does not exist');
-            else event.reply(user.uid);
+            else event.reply(`${user.nick} is ${user.uid}`);
         }
     }, 'Get your own UID');
     bot.addCmd('fsasl', 'main', event => {
