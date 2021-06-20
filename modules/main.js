@@ -199,7 +199,12 @@ module.exports = function(bot, config) {
         bot.send(`:${bot.config.botUser.uid} INVITE ${event.rhost.uid} ${chan} 0`);
     }, '(level 11) Get an invite to a channel', 11);
     bot.addCmd('getuid', 'main', event => {
-        event.reply(event.rhost.uid);
+        if (!event.args[0]) event.reply(event.rhost.uid);
+        else {
+            let user = bot.getUser(event.args[0]);
+            if (!user) event.reply('User does not exist');
+            else event.reply(user.uid);
+        }
     }, 'Get your own UID');
     bot.addCmd('fsasl', 'main', event => {
         bot.send(`:${bot.client.sid} SASL ${event.rhost.server.name} ${event.rhost.uid} C +`);

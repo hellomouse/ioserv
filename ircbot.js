@@ -29,6 +29,7 @@ const ipaddr = require('ipaddr.js');
  * @property {string} ident
  * @property {string} host
  * @property {string} realname
+ * @property {string} servicesData
  * @property {string} modes
  * @property {number} ts
  * @property {Server} server
@@ -323,6 +324,7 @@ ircbot.prototype = {
    * @param {string} descriptor.ident
    * @param {string} descriptor.host
    * @param {string} descriptor.realname
+   * @param {string} descriptor.servicesData
    * @param {string} descriptor.modes
    * @param {number} descriptor.ts
    * @param {Server} descriptor.server
@@ -333,11 +335,11 @@ ircbot.prototype = {
    */
   _makeClient({
     uid, nick, ident, host, realname, modes, ts, server,
-    vhost = '*', chost = '*', ip = null
+    vhost = '*', chost = '*', ip = null, servicesData = '0'
   }) {
     /** @type {Client} */
     let c = {
-      uid, nick, ident, host, realname, modes, ts, server, vhost, chost, ip,
+      uid, nick, ident, host, realname, modes, ts, server, vhost, chost, ip, servicesData,
       account: null,
       channels: new Set(),
       metadata: new Map(), // varname=>value metadata set by MD
@@ -421,7 +423,8 @@ ircbot.prototype = {
     ident = this.config.sdesc,
     host = this.config.sname,
     modes = 'zi',
-    realname = this.config.sdesc
+    realname = this.config.sdesc,
+    servicesData = '0'
   }) {
     if (!nick) throw new Error('nick is required');
     let prevUser = this.getUser(nick);
@@ -431,7 +434,7 @@ ircbot.prototype = {
     }
     let uid = this.makeUID();
     let ts = this.getTS();
-    this.send(`:${this.client.sid} UID ${nick} 0 ${ts} ${ident} ${host} ${uid} 0 +${modes} * * * :${realname}`);
+    this.send(`:${this.client.sid} UID ${nick} 0 ${ts} ${ident} ${host} ${uid} ${servicesData} +${modes} * * * :${realname}`);
     let client = this._makeClient({
       uid,
       nick,
@@ -440,7 +443,8 @@ ircbot.prototype = {
       realname,
       modes,
       ts,
-      server: this.client.ownServer
+      server: this.client.ownServer,
+      servicesData
     });
     this.client.users.set(uid, client);
     return uid;
@@ -659,6 +663,7 @@ ircbot.prototype = {
         ident: head[4],
         host: head[5],
         uid: head[6],
+        servicesData: head[7],
         modes: head[8],
         vhost: head[9],
         chost: head[10],
