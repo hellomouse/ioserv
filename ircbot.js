@@ -161,8 +161,8 @@ ircbot.prototype = {
     }
     if (msg == '') msg = ' ';
     // TODO: actually calculate length properly
-    // 512 byte max length, 14 bytes for ":!@ PRIVMSG  :"
-    let maxlen = 512 - 14 - srcUser.nick.length - srcUser.ident.length - srcUser.host.length - chan.length;
+    // 512 byte max length, 16 bytes for ":!@ PRIVMSG  :\r\n"
+    let maxlen = 512 - 16 - srcUser.nick.length - srcUser.ident.length - srcUser.host.length - chan.length;
     if (msg.length > maxlen) {
       if (trunc) {
         this._sendMsg(chan,src,msg.slice(0,maxlen-21)+' \x02(message truncated)');
