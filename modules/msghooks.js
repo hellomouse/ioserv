@@ -36,7 +36,15 @@ module.exports = function load(bot) {
     }
     bot.sendMsg('#services', `[autogline/pmflood] found [${msg[4]}] (addr [${rawTarget}], gline [${target}]) from [${source.name}] (max-concurrent-conversations)`);
     let expireTS = bot.getTS() + 86400; // 1 day
-    bot.addTKL('G', '*', target, 'IoServ[autogline/pmflood]', expireTS, `max-concurrent-conversations from ${source.name} (${rawTarget})`);
+    bot.addTKL('G', '*', target, 'IoServ[autogline/pmflood]', expireTS, `max-concurrent-conversations from ${msg[4]} on ${source.name} (addr ${rawTarget})`);
+  });
+
+  bot.servmsg.on('PRIVMSG', (head, msg, from) => {
+    // global private messages are extremely annoying, use global notices instead
+    if (head[1] !== '$*') return;
+    let target = bot.getUser(from);
+    bot.sendMsg(target.nick, 'Please do not use global private messages. They are misleading, annoying, and inappropriate. Use global notices instead.');
+    bot.kill(target, 'no global PRIVMSG please');
   });
 
   bot.events.on('newServer', server => {
