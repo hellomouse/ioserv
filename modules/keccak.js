@@ -30,7 +30,9 @@ module.exports = function load(bot) {
 
   // write irc messages to keccak, because why not
   bot.events.on('data', data => {
-    keccakStream.write(process.hrtime()[1].toString());
+    let writeTimeBuf = Buffer.alloc(4);
+    writeTimeBuf.writeUInt32LE(process.hrtime()[1]);
+    keccakStream.write(writeTimeBuf);
     keccakStream.write(data);
   });
 
