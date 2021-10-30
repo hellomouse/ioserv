@@ -64,8 +64,8 @@ module.exports = function load(bot) {
   if (STATE_SYNC_CHANNEL) {
     state.syncInterval = setInterval(() => {
       if (!state.syncLeader && state.lastSync + STATE_SYNC_INTERVAL * 1.5 < Date.now()) {
-        // existing leader is gone, become leader
-        state.syncLeader = true;
+        // existing leader is gone, 75% chance to become leader
+        if (floatSingle() < 0.75) state.syncLeader = true;
       }
       if (state.syncLeader) {
         let s = keccak.squeeze(KECCAK_BITRATE, 64).toString('base64');
