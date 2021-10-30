@@ -518,9 +518,11 @@ module.exports = function(bot, config) {
             }
         });
     });
+    /*
     bot.addCmd('', 'fun', event => {
         event.sendBack(randomPick(nullcmdreplies).replace('$nick', event.host[0]));
     });
+    */
     bot.addCmd('troll', 'fun', event => {
         if (!event.args[0]) event.args[0] = event.host[0]; // lol
         bot.nickdelay(event.args[0], 1e5);
@@ -556,6 +558,7 @@ module.exports = function(bot, config) {
         bot.delUser(event.args[0]);
     }, 'SaaS: Services as a Service!', 11);
     bot.addCmd('qr', 'fun', event => {
+        if (!event.args.join(' ').length) return event.reply('no input');
         QRCode.toString(event.args.join(" "), function (err, string) {
           if (err) throw err;
           string = string.split("\n");

@@ -1,26 +1,28 @@
 // @ts-check
-/* global BigInt */
 const stream = require('stream');
 
-/** Round constants */
+/**
+ * Round constants
+ * @type {readonly U64Pair[]}
+ */
 const RC = Object.freeze([
-  0x0000000000000001n, 0x0000000000008082n, 0x800000000000808An,
-  0x8000000080008000n, 0x000000000000808Bn, 0x0000000080000001n,
-  0x8000000080008081n, 0x8000000000008009n, 0x000000000000008An,
-  0x0000000000000088n, 0x0000000080008009n, 0x000000008000000An,
-  0x000000008000808Bn, 0x800000000000008Bn, 0x8000000000008089n,
-  0x8000000000008003n, 0x8000000000008002n, 0x8000000000000080n,
-  0x000000000000800An, 0x800000008000000An, 0x8000000080008081n,
-  0x8000000000008080n, 0x0000000080000001n, 0x8000000080008008n
-]);
+  [0x00000000, 0x00000001], [0x00000000, 0x00008082], [0x80000000, 0x0000808A],
+  [0x80000000, 0x80008000], [0x00000000, 0x0000808B], [0x00000000, 0x80000001],
+  [0x80000000, 0x80008081], [0x80000000, 0x00008009], [0x00000000, 0x0000008A],
+  [0x00000000, 0x00000088], [0x00000000, 0x80008009], [0x00000000, 0x8000000A],
+  [0x00000000, 0x8000808B], [0x80000000, 0x0000008B], [0x80000000, 0x00008089],
+  [0x80000000, 0x00008003], [0x80000000, 0x00008002], [0x80000000, 0x00000080],
+  [0x00000000, 0x0000800A], [0x80000000, 0x8000000A], [0x80000000, 0x80008081],
+  [0x80000000, 0x00008080], [0x00000000, 0x80000001], [0x80000000, 0x80008008]
+].map(a => new Uint32Array(a)));
 
 /** Rotation offsets */
 const R = Object.freeze([
-  0n, 1n, 62n, 28n, 27n,
-  36n, 44n, 6n, 55n, 20n,
-  3n, 10n, 43n, 25n, 39n,
-  41n, 45n, 15n, 21n, 8n,
-  18n, 2n, 61n, 56n, 14n
+  0, 1, 62, 28, 27,
+  36, 44, 6, 55, 20,
+  3, 10, 43, 25, 39,
+  41, 45, 15, 21, 8,
+  18, 2, 61, 56, 14
 ]);
 
 /**
@@ -64,71 +66,91 @@ function itoxy(i) {
   return [i % 5, Math.floor(i / 5)];
 }
 
-/** It is as it is named */
-const SIXTY_FOUR_BIT = 2n ** 64n - 1n;
+// [most significant, least significant]
+/** @typedef {Uint32Array} U64Pair */
 /**
- * Unsigned 64-bit integer (as bigint) rotate left
- * @param {bigint} n Number
- * @param {bigint} r How many places to rotate
- * @return {bigint}
+ * It is as it is named
+ * @type {U64Pair}
  */
-function u64Rotate(n, r) {
-  return (n >> (64n - r)) | BigInt.asUintN(64, n << r);
+const SIXTY_FOUR_BIT = new Uint32Array([0xFFFFFFFF, 0xFFFFFFFF]);
+
+/**
+ * Unsigned 64-bit integer (as two unsigned 32-bit integers) rotate left
+ * @param {U64Pair} output Array to put output value
+ * @param {U64Pair} n Number
+ * @param {number} r How many places to rotate
+ */
+function u64Rotate(output, n, r) {
+  let ia = n[0];
+  let ib = n[1];
+
+  // if over 32, shift by 32 first then shift the rest
+  if (r >= 32) {
+    let iaPrev = ia;
+    ia = ib;
+    ib = iaPrev;
+    r -= 32;
+  }
+  let oa = ia;
+  let ob = ib;
+  // shift is now under 32
+  // don't do anything if shift is 0
+  if (r > 0) {
+    let ri = 32 - r;
+    oa = (ia << r) >>> 0;
+    oa = (oa | (ib >>> ri)) >>> 0;
+    ob = (ib << r) >>> 0;
+    ob = (ob | (ia >>> ri)) >>> 0;
+  }
+  output[0] = oa;
+  output[1] = ob;
 }
 
 /**
- * The keccak-f[1600] function
- * @param {bigint[]} a The state (5x5 matrix of u64s)
- * @param {number} rounds Number of rounds to perform
- *   (SHA-3 uses 24, KangarooTwelve uses 12)
- * @return {bigint[]} Transformed state
+ * XOR two or more u64s
+ * @param {U64Pair} output Array to put output value
+ * @param {...U64Pair} args Inputs
  */
-function keccakf(a, rounds = 24) {
-  for (let i = 0; i < rounds; i++) a = keccakRound(a, RC[i]);
-  return a;
+function u64XorMany(output, ...args) {
+  let a = 0;
+  let b = 0;
+  for (let i = 0; i < args.length; i++) {
+    a = (a ^ args[i][0]) >>> 0;
+    b = (b ^ args[i][1]) >>> 0;
+  }
+  output[0] = a;
+  output[1] = b;
 }
 
-// temporary arrays for keccakf rounds
-/** @type {bigint[]} */
-let b = new Array(25).fill(0n);
-/** @type {bigint[]} */
-let c = new Array(5).fill(0n);
-/** @type {bigint[]} */
-let d = new Array(5).fill(0n);
+/**
+ * XOR exactly two u64s
+ * @param {U64Pair} output Array to put output value
+ * @param {U64Pair} a First input
+ * @param {U64Pair} b Second input
+ */
+function u64XorTwo(output, a, b) {
+  output[0] = (a[0] ^ b[0]) >>> 0;
+  output[1] = (a[1] ^ b[1]) >>> 0;
+}
 
 /**
- * Keccak round function
- * @param {bigint[]} a Current state
- * @param {bigint} rc Current round constant
- * @return {bigint[]} Next state
+ * XOR another value with first parameter, storing result in first parameter
+ * @param {U64Pair} output Array to put output value
+ * @param {U64Pair} p Input
  */
-function keccakRound(a, rc) {
-  // θ step
-  for (let x = 0; x < 5; x++) {
-    c[x] = a[xytoi(x, 0)] ^ a[xytoi(x, 1)] ^ a[xytoi(x, 2)] ^ a[xytoi(x, 3)] ^ a[xytoi(x, 4)];
-  }
-  for (let x = 0; x < 5; x++) {
-    d[x] = c[(x + 4) % 5] ^ u64Rotate(c[(x + 1) % 5], 1n);
-  }
-  for (let i = 0; i < 25; i++) {
-    a[i] ^= d[i % 5];
-  }
+function u64XorInplace(output, p) {
+  output[0] = (output[0] ^ p[0]) >>> 0;
+  output[1] = (output[1] ^ p[1]) >>> 0;
+}
 
-  // ρ and π steps
-  for (let [from, to] of PI_TRANSFORM) {
-    b[to] = u64Rotate(a[from], R[from]);
-  }
-
-  // χ step
-  for (let i = 0; i < 25; i++) {
-    let [x, y] = itoxy(i);
-    a[i] = b[i] ^ ((b[xytoi(x + 1, y)] ^ SIXTY_FOUR_BIT) & b[xytoi(x + 2, y)]);
-  }
-
-  // ι step
-  a[0] ^= rc;
-
-  return a;
+/**
+ * AND another value with first parameter, storing result in first parameter
+ * @param {U64Pair} output Array to put output value
+ * @param {U64Pair} p Input
+ */
+function u64AndInplace(output, p) {
+  output[0] = (output[0] & p[0]) >>> 0;
+  output[1] = (output[1] & p[1]) >>> 0;
 }
 
 /**
@@ -210,12 +232,7 @@ class KeccakWritable extends stream.Writable {
         this._buffer = [chunk.slice(chunk.length - excess)];
         this.bufferLength = excess;
       }
-      for (let i = 0; i < writeBuf.length; i += this.byterate) {
-        for (let j = 0; j < this.bitrate / 64; j++) {
-          this.instance.state[j] ^= writeBuf.readBigUInt64LE(i + j * 8);
-        }
-        this.instance.keccakf();
-      }
+      this.instance.absorbRaw(this.bitrate, writeBuf);
     }
     callback(null);
   }
@@ -234,14 +251,136 @@ class KeccakWritable extends stream.Writable {
 // TODO: allow it to run on state lengths other than 1600
 class Keccak {
   constructor(rounds = 24) {
-    /** @type {bigint[]} */
-    this.state = new Array(25).fill(0n);
+    // backing buffer for state and temporary values
+    this._buffer = new ArrayBuffer(480);
+    /** @type {U64Pair[]} */
+    this.state = new Array(25).fill(null).map((_a, i) => new Uint32Array(this._buffer, i * 8, 2));
+    /** @type {U64Pair[]} */
+    this.b = new Array(25).fill(null).map((_a, i) => new Uint32Array(this._buffer, (i + 25) * 8, 2));
+    /** @type {U64Pair[]} */
+    this.c = new Array(5).fill(null).map((_a, i) => new Uint32Array(this._buffer, (i + 50) * 8, 2));
+    /** @type {U64Pair[]} */
+    this.d = new Array(5).fill(null).map((_a, i) => new Uint32Array(this._buffer, (i + 55) * 8, 2));
     this.rounds = rounds;
   }
 
-  /** Run keccak-f on internal state */
-  keccakf() {
-    keccakf(this.state, this.rounds);
+  /**
+   * The keccak-f[1600] function
+   * @param {number} rounds Number of rounds to perform
+   *   (SHA-3 uses 24, KangarooTwelve uses 12)
+   */
+  keccakf(rounds = this.rounds) {
+    // keccak-p reduced round uses last n round constants
+    let offset = RC.length - rounds;
+    for (let i = 0; i < rounds; i++) this.keccakRound(RC[offset + i]);
+  }
+
+  /**
+   * Keccak round function without loop unrolling
+   * @param {U64Pair} rc Current round constant
+   */
+  keccakRoundOriginal(rc) {
+    let a = this.state;
+    let b = this.b;
+    let c = this.c;
+    let d = this.d;
+    // θ step
+    for (let x = 0; x < 5; x++) {
+      u64XorMany(c[x], a[xytoi(x, 0)], a[xytoi(x, 1)], a[xytoi(x, 2)], a[xytoi(x, 3)], a[xytoi(x, 4)]);
+    }
+    for (let x = 0; x < 5; x++) {
+      u64Rotate(d[x], c[(x + 1) % 5], 1);
+      u64XorInplace(d[x], c[(x + 4) % 5]);
+    }
+    for (let i = 0; i < 25; i++) {
+      u64XorInplace(a[i], d[i % 5]);
+    }
+
+    // ρ and π steps
+    for (let i = 0; i < PI_TRANSFORM.length; i++) {
+      let from = PI_TRANSFORM[i][0];
+      let to = PI_TRANSFORM[i][1];
+      u64Rotate(b[to], a[from], R[from]);
+    }
+
+    // χ step
+    for (let i = 0; i < 25; i++) {
+      let [x, y] = itoxy(i);
+      u64XorTwo(a[i], b[xytoi(x + 1, y)], SIXTY_FOUR_BIT);
+      u64AndInplace(a[i], b[xytoi(x + 2, y)]);
+      u64XorInplace(a[i], b[i]);
+    }
+
+    // ι step
+    u64XorInplace(a[0], rc);
+  }
+
+  /**
+   * Keccak round function but way longer than it ought to be
+   * @param {U64Pair} rc Current round constant
+   */
+  keccakRound(rc) {
+    let a = this.state;
+    let b = this.b;
+    let c = this.c;
+    let d = this.d;
+
+    // θ step
+    // unrolling provides performance gain
+    u64XorMany(c[0], a[0], a[5], a[10], a[15], a[20]);
+    u64XorMany(c[1], a[1], a[6], a[11], a[16], a[21]);
+    u64XorMany(c[2], a[2], a[7], a[12], a[17], a[22]);
+    u64XorMany(c[3], a[3], a[8], a[13], a[18], a[23]);
+    u64XorMany(c[4], a[4], a[9], a[14], a[19], a[24]);
+
+    for (let x = 0; x < 5; x++) {
+      u64Rotate(d[x], c[(x + 1) % 5], 1);
+      u64XorInplace(d[x], c[(x + 4) % 5]);
+    }
+
+    for (let i = 0; i < 25; i++) {
+      u64XorInplace(a[i], d[i % 5]);
+    }
+
+    // ρ and π steps
+    // unrolling provides performance gain
+    u64Rotate(b[0], a[0], 0);
+    u64Rotate(b[10], a[1], 1);
+    u64Rotate(b[20], a[2], 62);
+    u64Rotate(b[5], a[3], 28);
+    u64Rotate(b[15], a[4], 27);
+    u64Rotate(b[16], a[5], 36);
+    u64Rotate(b[1], a[6], 44);
+    u64Rotate(b[11], a[7], 6);
+    u64Rotate(b[21], a[8], 55);
+    u64Rotate(b[6], a[9], 20);
+    u64Rotate(b[7], a[10], 3);
+    u64Rotate(b[17], a[11], 10);
+    u64Rotate(b[2], a[12], 43);
+    u64Rotate(b[12], a[13], 25);
+    u64Rotate(b[22], a[14], 39);
+    u64Rotate(b[23], a[15], 41);
+    u64Rotate(b[8], a[16], 45);
+    u64Rotate(b[18], a[17], 15);
+    u64Rotate(b[3], a[18], 21);
+    u64Rotate(b[13], a[19], 8);
+    u64Rotate(b[14], a[20], 18);
+    u64Rotate(b[24], a[21], 2);
+    u64Rotate(b[9], a[22], 61);
+    u64Rotate(b[19], a[23], 56);
+    u64Rotate(b[4], a[24], 14);
+
+    // χ step
+    for (let i = 0; i < 25; i++) {
+      let x = i % 5;
+      let y = Math.floor(i / 5);
+      u64XorTwo(a[i], b[y * 5 + ((x + 1) % 5)], SIXTY_FOUR_BIT);
+      u64AndInplace(a[i], b[y * 5 + ((x + 2) % 5)]);
+      u64XorInplace(a[i], b[i]);
+    }
+
+    // ι step
+    u64XorInplace(a[0], rc);
   }
 
   /**
@@ -253,9 +392,22 @@ class Keccak {
    */
   absorb(r, bytes, bits = 0, bitLength = 0) {
     let padded = pad(r, bytes, bits, bitLength);
-    for (let i = 0; i < padded.length; i += r / 8) {
+    this.absorbRaw(r, padded);
+  }
+
+  /**
+   * Feed bytes to the sponge function without padding
+   * Input buffer length must be a multiple of r / 8
+   * @param {number} r Keccak r value ("bitrate")
+   * @param {Buffer} bytes Buffer of data
+   */
+  absorbRaw(r, bytes) {
+    for (let i = 0; i < bytes.length; i += r / 8) {
       for (let j = 0; j < r / 64; j++) {
-        this.state[j] ^= padded.readBigUInt64LE(i + j * 8);
+        let offset = i + j * 8;
+        // screwy byte order
+        this.state[j][0] ^= bytes.readUInt32LE(offset + 4);
+        this.state[j][1] ^= bytes.readUInt32LE(offset);
       }
       this.keccakf();
     }
@@ -282,7 +434,8 @@ class Keccak {
     let buf = Buffer.alloc(Math.ceil(byteLength / (r / 8)) * (r / 8));
     for (let i = 0; i < byteLength; i += r / 8) {
       for (let j = 0; j < r / 64; j++) {
-        buf.writeBigUInt64LE(this.state[j], i + j * 8);
+        buf.writeUInt32LE(this.state[j][0], i + j * 8 + 4);
+        buf.writeUInt32LE(this.state[j][1], i + j * 8);
       }
       this.keccakf();
     }
@@ -291,13 +444,11 @@ class Keccak {
 
   /** Clear internal state */
   clear() {
-    this.state.fill(0n);
+    new Uint32Array(this._buffer).fill(0);
   }
 }
 
 module.exports = {
-  keccakf,
-  keccakRound,
   pad,
   Keccak,
   KeccakWritable

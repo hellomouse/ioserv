@@ -99,6 +99,7 @@ if (cluster.isMaster) {
       bot.join(bot.client.botUser.uid,"#services");
       bot.mode('#services', '+o ' + bot.client.botUser.nick);
       bot.join(bot.client.botUser.uid, "#hellomouse");
+      bot.join(bot.client.botUser.uid, '#hellomouse-botwar');
       bot.join(bot.client.botUser.uid, '#pissnet');
       bot.mode('#pissnet', '+o ' + bot.client.botUser.nick);
       bot.join(bot.client.botUser.uid, '#opers');

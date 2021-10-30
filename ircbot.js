@@ -410,7 +410,7 @@ ircbot.prototype = {
   makeUID() {
     // TODO: check if uid already exists, extremely unlikely but meh
     let uid = (this.client.uid++%1e6).toString(16);
-    return this.client.sid+"0".repeat(Math.abs(6-uid.length))+uid;
+    return (this.client.sid+"0".repeat(Math.abs(6-uid.length))+uid).toUpperCase();
   },
   /**
    * Get current TS

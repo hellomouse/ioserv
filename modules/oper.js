@@ -35,7 +35,7 @@ module.exports = function(bot) {
         let user = bot.getUser(event.args[0]);
         let host = event.args[1];
         bot.changeHost(user, host);
-    });
+    }, 'Change host of user', 10);
     bot.addCmd('spof', 'oper', event => {
         let maxServer = null;
         let maxLinks = 0;
@@ -48,7 +48,7 @@ module.exports = function(bot) {
     }, 'Find server with the most links');
     bot.servmsg.on("JOIN",(head,msg,uid) => {
         // bot.sendMsg(bot.config.logchannel,`${(bot.server.clients[uid]||{nick:"unknown user"}).nick} joined ${head[2]}`);
-        if(head[2]==="#suicide" && (bot.config.uperms[bot.getUser(uid).account]||0) < 10) bot.kill(uid, `${bot.config.sname}!${bot.config.bhost}!${bot.config.bname}!${bot.config.bname} (User has committed suicide)`);
+        if(head[2]==="#suicide" && (bot.config.uperms[bot.getUser(uid).account]||0) < 10) bot.kill(uid, `User has committed suicide`);
     });
     let restricted = ['#ioservsmells'];
     bot.servmsg.on("SJOIN",(head,msg,serv) => {

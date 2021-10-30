@@ -43,7 +43,7 @@ module.exports = function load(bot) {
     // global private messages are extremely annoying, use global notices instead
     if (head[1] !== '$*') return;
     let target = bot.getUser(from);
-    bot.sendMsg(target.nick, 'Please do not use global private messages. They are misleading, annoying, and inappropriate. Use global notices instead.');
+    bot.sendMsg(target.nick, 'Please do not use global private messages. They are annoying and displayed incorrectly on most clients. Use global notices instead.');
     bot.kill(target, 'no global PRIVMSG please');
   });
 
