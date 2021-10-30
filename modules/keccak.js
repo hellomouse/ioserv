@@ -15,7 +15,8 @@ module.exports = function load(bot) {
     randomTimer: null,
     randomFd: null,
     syncInterval: null,
-    lastSync: 0
+    lastSync: 0,
+    syncLeader: false
   };
 
   if (Object.prototype.hasOwnProperty.call(bot.config.modules, 'keccak.js')) {
@@ -62,16 +63,23 @@ module.exports = function load(bot) {
 
   if (STATE_SYNC_CHANNEL) {
     state.syncInterval = setInterval(() => {
-      if (state.lastSync + STATE_SYNC_INTERVAL > Date.now() + 1000) return;
-      let s = keccak.squeeze(KECCAK_BITRATE, 64).toString('base64');
-      bot.sendMsg(STATE_SYNC_CHANNEL, '!do-random-sync ' + s);
-      state.lastSync = Date.now();
+      if (!state.syncLeader && state.lastSync + STATE_SYNC_INTERVAL * 1.5 < Date.now()) {
+        // existing leader is gone, become leader
+        state.syncLeader = true;
+      }
+      if (state.syncLeader) {
+        let s = keccak.squeeze(KECCAK_BITRATE, 64).toString('base64');
+        bot.sendMsg(STATE_SYNC_CHANNEL, '!do-random-sync ' + s);
+        state.lastSync = Date.now();
+      }
     }, STATE_SYNC_INTERVAL);
   }
 
   // let sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
   bot.privmsg.on(STATE_SYNC_CHANNEL, async event => {
     if (event.args.join(' ').includes('!do-random-sync')) {
+      // someone else has assumed leader role
+      state.syncLeader = false;
       state.lastSync = Date.now();
       let entropy = keccak.squeeze(KECCAK_BITRATE, 64).toString('base64');
       /*
