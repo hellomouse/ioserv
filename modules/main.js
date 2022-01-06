@@ -194,11 +194,13 @@ module.exports = function(bot, config) {
         bot.send(`:${bot.config.botUser.uid} INVITE ${event.rhost.uid} ${chan} 0`);
     }, '(level 11) Get an invite to a channel', 11);
     bot.addCmd('getuid', 'main', event => {
+        let nonceSuffix = '';
+        if (event.args[1]) nonceSuffix = ` (${event.args[1]})`;
         if (!event.args[0]) event.reply(`${event.rhost.nick} is ${event.rhost.uid}`);
         else {
             let user = bot.getUser(event.args[0]);
-            if (!user) event.reply('User does not exist');
-            else event.reply(`${user.nick} is ${user.uid}`);
+            if (!user) event.reply('User does not exist' + nonceSuffix);
+            else event.reply(`${user.nick} is ${user.uid}` + nonceSuffix);
         }
     }, 'Get your own UID');
     bot.addCmd('fsasl', 'main', event => {
