@@ -1,4 +1,4 @@
-const { Keccak } = require('../util/keccak');
+const { Keccak, KeccakRand } = require('../util/keccak');
 const { promises: fsP } = require('fs');
 
 const STATE_SYNC_CHANNEL = '#hellomouse-botwar';
@@ -7,11 +7,11 @@ const KECCAK_BITRATE = 512;
 
 module.exports = function load(bot) {
   let keccak = new Keccak(12);
-  let keccakStream = keccak.absorbStream(KECCAK_BITRATE);
+  let keccakRand = new KeccakRand(keccak, KECCAK_BITRATE);
   let state = {
     keccak,
-    keccakStream,
-    randomBytes: keccak.squeeze.bind(keccak, KECCAK_BITRATE),
+    keccakRand,
+    randomBytes: keccakRand.bytes.bind(keccakRand),
     randomTimer: null,
     randomFd: null,
     syncInterval: null,
@@ -33,26 +33,26 @@ module.exports = function load(bot) {
   bot.events.on('data', data => {
     let writeTimeBuf = Buffer.alloc(4);
     writeTimeBuf.writeUInt32LE(process.hrtime()[1]);
-    keccakStream.write(writeTimeBuf);
-    keccakStream.write(data);
+    keccakRand.write(writeTimeBuf);
+    keccakRand.write(data);
   });
 
   async function randomStuff() {
     let time1 = process.hrtime()[1];
-    let readBuf = Buffer.allocUnsafe(KECCAK_BITRATE / 8);
-    let writeBuf = keccak.squeeze(KECCAK_BITRATE, KECCAK_BITRATE / 8);
+    let readBuf = Buffer.allocUnsafe(keccakRand.byterate);
+    let writeBuf = keccakRand.bytesDirect(keccakRand.byterate);
     await Promise.all([
       state.randomFd.read(readBuf, 0, readBuf.length, null),
       state.randomFd.write(writeBuf)
     ]);
-    keccak.absorbRaw(KECCAK_BITRATE, readBuf);
-    let timeBuf = keccak.squeeze(KECCAK_BITRATE, 2);
+    keccakRand.seedDirect(readBuf);
+    let timeBuf = keccakRand.bytes(2);
     let time = timeBuf.readUInt16BE();
     let time2 = process.hrtime()[1];
     if (time2 < time1) time2 += 1e9;
     let writeTimeBuf = Buffer.alloc(4);
     writeTimeBuf.writeUInt32LE(time2 - time1);
-    keccakStream.write(writeTimeBuf);
+    keccakRand.write(writeTimeBuf);
     state.randomTimer = setTimeout(randomStuff, time * 10);
   }
 
@@ -65,10 +65,10 @@ module.exports = function load(bot) {
     state.syncInterval = setInterval(() => {
       if (!state.syncLeader && state.lastSync + STATE_SYNC_INTERVAL * 1.5 < Date.now()) {
         // existing leader is gone, 75% chance to become leader
-        if (floatSingle() < 0.75) state.syncLeader = true;
+        if (keccakRand.float() < 0.75) state.syncLeader = true;
       }
       if (state.syncLeader) {
-        let s = keccak.squeeze(KECCAK_BITRATE, 64).toString('base64');
+        let s = keccakRand.bytes(64).toString('base64');
         bot.sendMsg(STATE_SYNC_CHANNEL, '!do-random-sync ' + s);
         state.lastSync = Date.now();
       }
@@ -81,10 +81,10 @@ module.exports = function load(bot) {
       // someone else has assumed leader role
       state.syncLeader = false;
       state.lastSync = Date.now();
-      let entropy = keccak.squeeze(KECCAK_BITRATE, 64).toString('base64');
+      let entropy = keccakRand.bytes(64).toString('base64');
       /*
       if (event.args.join(' ').replace(/[^a-zA-Z\s\/]/g, '').toLowerCase().includes('/dev/jeda')) {
-        let [rand, delayMaybe] = floatMany(2);
+        let [rand, delayMaybe] = keccakRand.floatMany(2);
         if (delayMaybe < 0.1) await sleep(delayMaybe * 100 * 1000);
         let offset = 0;
         if (rand < (offset += 0.25)) {
@@ -94,7 +94,7 @@ module.exports = function load(bot) {
           event.sendBack('!random-sync ' + entropy);
           if (delayMaybe < 0.3) {
             await sleep(delayMaybe * 1000 * 1000);
-            let moreEntropy = keccak.squeeze(KECCAK_BITRATE, 64).toString('base64');
+            let moreEntropy = keccakRand.bytes(64).toString('base64');
             event.sendBack('!do-random-sync ' + moreEntropy);
           }
         } else if (rand < (offset += 0.25)) {
@@ -102,8 +102,8 @@ module.exports = function load(bot) {
           event.sendBack('!do-random-sync ' + entropy);
         } else if (rand < (offset += 0.25)) {
           // fun
-          let amount = Math.floor(floatSingle() * 192) + 32;
-          let moreEntropy = keccak.squeeze(KECCAK_BITRATE, amount).toString('base64');
+          let amount = Math.floor(keccakRand.float() * 192) + 32;
+          let moreEntropy = keccakRand.bytes(Kamount).toString('base64');
           event.sendBack('!do-random-sync ' + moreEntropy)
         }
         return;
@@ -113,25 +113,8 @@ module.exports = function load(bot) {
     }
   });
 
-  function floatSingle() {
-    let buf = keccak.squeeze(KECCAK_BITRATE, 8);
-    buf[7] = 63;
-    buf[6] |= 0xf0;
-    return buf.readDoubleLE() - 1;
-  }
   // fun
-  Math.random = floatSingle;
-
-  function floatMany(n) {
-    let out = [];
-    let buf = keccak.squeeze(KECCAK_BITRATE, n * 8);
-    for (let i = 0; i < buf.length; i += 8) {
-      buf[i + 7] = 63;
-      buf[i + 6] |= 0xf0;
-      out.push(buf.readDoubleLE(i) - 1);
-    }
-    return out;
-  }
+  Math.random = keccakRand.float.bind(keccakRand);
 
   bot.addCmd('random', 'keccak', event => {
     let args = event.args.map(a => a.toLowerCase());
@@ -181,7 +164,7 @@ module.exports = function load(bot) {
       return [count, sides];
     }).filter(Boolean).slice(0, 5);
     for (let [count, sides] of dice) {
-      let source = floatMany(count);
+      let source = keccakRand.floatMany(count);
       let results = [];
       for (let pick of source) {
         let result = Math.floor(pick * sides) + 1;
